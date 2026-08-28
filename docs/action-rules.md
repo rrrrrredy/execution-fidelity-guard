@@ -1,0 +1,69 @@
+# Action rule reference
+
+Hard decisions require an explicit structured rule. Matching is case-insensitive.
+
+## Rule forms
+
+- `action:<tag>` matches a normalized action tag.
+- `tool:<name>` matches the exact canonical Hook tool name.
+- `command-prefix:<text>` matches the literal beginning of a Bash command after whitespace trimming.
+
+Supported action tags:
+
+- `read`
+- `write` or `write_workspace`
+- `delete`
+- `destructive`
+- `install_local`
+- `network`
+- `publish`
+- `external` or `external_side_effect`
+- `unknown`
+
+## Precedence
+
+Rules are evaluated in this order:
+
+1. `authorization.forbidden`
+2. `must_and_must_not.must_not`
+3. `authorization.requires_user`
+4. `authorization.allowed`
+
+A forbidden or must-not match wins over an allow match. `requires_user`
+denies the pending action and asks the Agent to obtain one explicit user
+answer. Guard does not consume approval from chat and does not own
+authorization state. After approval, Intent Loop must publish a higher
+`contract_version` that moves the exact bounded rule to `allowed`; for a
+TaskContractLite fallback, the user or Agent edits the reviewed fallback so its
+content-derived reference changes. Retrying the unchanged contract asks again.
+An allow rule never auto-approves a native Codex permission request.
+
+In `shadow` mode, a would-block or would-ask result becomes a reminder.
+
+## Local install classification
+
+The classifier recognizes direct invocations of common package managers and environment provisioners, including:
+
+- pip, `python -m pip`, uv, pipx, poetry, pipenv;
+- npm, npx, pnpm, yarn, bun, bunx;
+- cargo, go, gem, bundle, dotnet tool;
+- conda, mamba, winget, choco, scoop, brew, apt, dnf, and yum;
+- PowerShell `Install-Package` and `Install-Module`.
+
+Searches such as `rg "pip install"` and normal commands such as `node --test` do not match install_local.
+
+The parser splits unquoted shell segments and inspects the leading executable. It is not a complete PowerShell, cmd.exe, or POSIX shell interpreter. Commands hidden behind arbitrary scripts, aliases, eval, encoded payloads, or unsupported wrappers may not be recognized.
+
+Version 0.1.0 does not derive path-aware scope, primary-object, delivery-surface,
+or cost decisions from natural language. Those contract fields are context for
+the Agent and future provider integrations, not deterministic block authority.
+
+## Natural-language constraints
+
+A sentence such as "do not install locally" remains a semantic reminder. To enforce the same already-explicit boundary, use:
+
+    "authorization": {
+      "forbidden": ["action:install_local"]
+    }
+
+Do not translate ambiguous natural language into a structured rule without confirming the intended authorization boundary.

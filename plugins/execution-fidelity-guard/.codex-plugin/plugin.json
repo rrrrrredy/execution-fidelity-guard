@@ -1,0 +1,39 @@
+{
+  "name": "execution-fidelity-guard",
+  "version": "0.1.0",
+  "description": "Apply explicit task action rules and evidence-aware completion checks at Codex Hook boundaries.",
+  "author": {
+    "name": "rrrrrredy",
+    "url": "https://github.com/rrrrrredy"
+  },
+  "homepage": "https://github.com/rrrrrredy/execution-fidelity-guard#readme",
+  "repository": "https://github.com/rrrrrredy/execution-fidelity-guard",
+  "license": "Apache-2.0",
+  "keywords": [
+    "codex",
+    "hooks",
+    "task-contract",
+    "execution-safety",
+    "evidence"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Execution Fidelity Guard",
+    "shortDescription": "Enforce explicit action rules without blocking normal exploration.",
+    "longDescription": "A local-first execution fidelity layer for deterministic action gates, evidence receipts, and completion verification.",
+    "developerName": "rrrrrredy",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/rrrrrredy/execution-fidelity-guard",
+    "privacyPolicyURL": "https://github.com/rrrrrredy/execution-fidelity-guard/blob/main/PRIVACY.md",
+    "termsOfServiceURL": "https://github.com/rrrrrredy/execution-fidelity-guard/blob/main/LICENSE",
+    "defaultPrompt": [
+      "Show the active task contract and explain any guard decision.",
+      "Check whether my next action needs explicit authorization.",
+      "List missing completion evidence without exposing raw content."
+    ]
+  }
+}

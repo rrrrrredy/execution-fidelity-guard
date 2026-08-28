@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ExecutionFidelityDecisionReceipt",
+  "description": "Auditable decision record bound to one event and contract version.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "receipt_id",
+    "event_ref",
+    "contract_ref",
+    "contract_version",
+    "decision",
+    "authority",
+    "severity",
+    "reason_codes",
+    "evidence_refs",
+    "visibility",
+    "reversible",
+    "coverage",
+    "decided_at",
+    "latency_ms"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "receipt_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "event_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "contract_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "contract_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "decision": {
+      "type": "string",
+      "enum": [
+        "continue",
+        "remind",
+        "ask",
+        "block",
+        "continue_verification"
+      ]
+    },
+    "authority": {
+      "type": "string",
+      "enum": [
+        "deterministic_rule",
+        "semantic_candidate",
+        "external_evidence",
+        "user",
+        "native_codex"
+      ]
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ]
+    },
+    "reason_codes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "rule_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "visibility": {
+      "type": "string",
+      "enum": [
+        "silent",
+        "model",
+        "user"
+      ]
+    },
+    "reversible": {
+      "type": "boolean"
+    },
+    "coverage": {
+      "type": "string",
+      "enum": [
+        "observed",
+        "partial",
+        "unobserved"
+      ]
+    },
+    "unlock": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "semantic_model": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "decided_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "latency_ms": {
+      "type": "number",
+      "minimum": 0
+    }
+  }
+}

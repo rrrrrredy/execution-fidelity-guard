@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ContractEnvelope",
+  "description": "Versioned identity and provenance for an active task contract.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "contract_ref",
+    "contract_version",
+    "source",
+    "source_message_refs",
+    "updated_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "contract_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "contract_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "user-intent-plugin",
+        "task-contract-lite"
+      ]
+    },
+    "source_message_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "snapshot_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "task_contract_lite": {
+      "$ref": "./task-contract-lite.schema.json"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "source": {
+            "const": "task-contract-lite"
+          }
+        },
+        "required": [
+          "source"
+        ]
+      },
+      "then": {
+        "required": [
+          "task_contract_lite",
+          "snapshot_sha256"
+        ]
+      },
+      "else": {
+        "not": {
+          "required": [
+            "task_contract_lite"
+          ]
+        }
+      }
+    }
+  ]
+}

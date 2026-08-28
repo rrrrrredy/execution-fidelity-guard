@@ -1,0 +1,42 @@
+{
+  "objective": "Deliver a tested repository change without installing project dependencies locally.",
+  "primary_object": "the requested repository",
+  "delivery_surface": [
+    "repository"
+  ],
+  "scope": {
+    "include": [
+      "workspace source and documentation"
+    ],
+    "exclude": [
+      "global Codex configuration"
+    ]
+  },
+  "must_and_must_not": {
+    "must": [
+      "Preserve the user-requested delivery surface"
+    ],
+    "must_not": []
+  },
+  "authorization": {
+    "allowed": [
+      "action:read",
+      "action:write"
+    ],
+    "requires_user": [
+      "action:publish",
+      "action:delete"
+    ],
+    "forbidden": [
+      "action:install_local"
+    ]
+  },
+  "completion_evidence": [
+    {
+      "requirement": "evidence:test",
+      "acceptable_sources": [
+        "test"
+      ]
+    }
+  ]
+}

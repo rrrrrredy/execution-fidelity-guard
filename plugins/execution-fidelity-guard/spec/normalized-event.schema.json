@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "NormalizedExecutionEvent",
+  "description": "Minimal content-free event facts observed by plugin hooks.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "event_id",
+    "session_id",
+    "event_type",
+    "observed_at",
+    "contract_ref",
+    "contract_version",
+    "coverage",
+    "facts"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "event_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "session_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "turn_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "tool_use_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "session_start",
+        "user_prompt_submit",
+        "pre_tool_use",
+        "permission_request",
+        "post_tool_use",
+        "pre_compact",
+        "post_compact",
+        "stop",
+        "session_end"
+      ]
+    },
+    "observed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "tool_name": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "contract_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "contract_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "coverage": {
+      "type": "string",
+      "enum": [
+        "observed",
+        "partial",
+        "unobserved"
+      ]
+    },
+    "input_sha256": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "result_sha256": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "facts": {
+      "type": "object",
+      "description": "Minimal redacted facts only; no full transcript, hidden reasoning, credentials, or secrets."
+    }
+  }
+}

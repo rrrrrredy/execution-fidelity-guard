@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EvidenceReference",
+  "description": "Minimal reference to observed or attested evidence without raw content.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "evidence_ref",
+    "kind",
+    "source",
+    "captured_at",
+    "freshness",
+    "coverage",
+    "status",
+    "attestation"
+  ],
+  "properties": {
+    "evidence_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "file",
+        "command",
+        "test",
+        "api",
+        "database",
+        "real_page",
+        "release",
+        "user",
+        "contract"
+      ]
+    },
+    "source": {
+      "type": "string",
+      "minLength": 1
+    },
+    "redacted_locator": {
+      "type": "string"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "captured_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "freshness": {
+      "type": "string",
+      "enum": [
+        "current_event",
+        "current_turn",
+        "current_task",
+        "stale",
+        "unknown"
+      ]
+    },
+    "coverage": {
+      "type": "string",
+      "enum": [
+        "full_requirement",
+        "partial_requirement",
+        "unscoped"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "fail",
+        "contradictory",
+        "unknown"
+      ]
+    },
+    "attestation": {
+      "type": "string",
+      "enum": [
+        "hook_observed",
+        "caller_attested"
+      ]
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "session_id": "demo-session",
+  "transcript_path": null,
+  "cwd": "/workspace/demo",
+  "hook_event_name": "Stop",
+  "model": "demo-model",
+  "permission_mode": "default",
+  "turn_id": "demo-turn",
+  "stop_hook_active": false,
+  "last_assistant_message": "The requested work is completed."
+}

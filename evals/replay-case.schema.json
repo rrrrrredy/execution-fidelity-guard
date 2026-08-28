@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "HistoricalReplayCase",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "case_id",
+    "cohort",
+    "label_status",
+    "source",
+    "severity",
+    "categories",
+    "first_detectable_event",
+    "adjudicator",
+    "expected_intervention",
+    "isolation_reexecution_required",
+    "privacy"
+  ],
+  "properties": {
+    "case_id": {
+      "type": "string",
+      "pattern": "^efg-(failure|success)-[0-9]{3}$"
+    },
+    "cohort": {
+      "type": "string",
+      "enum": [
+        "failure",
+        "success"
+      ]
+    },
+    "label_status": {
+      "type": "string",
+      "enum": [
+        "provisional",
+        "confirmed"
+      ]
+    },
+    "matched_case_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rollout_sha256"
+      ],
+      "properties": {
+        "rollout_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "none",
+        "minor",
+        "major",
+        "critical"
+      ]
+    },
+    "categories": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "recent_supplement_promoted",
+          "tool_failure_changed_objective",
+          "all_scope_narrowed",
+          "forbidden_install_prepared",
+          "local_task_became_harness",
+          "attachment_only_delivery",
+          "failed_state_claimed_complete",
+          "reversible_exploration_blocked",
+          "constraint_forgotten",
+          "unauthorized_high_cost_action",
+          "result_narrative_mismatch",
+          "negative_control"
+        ]
+      }
+    },
+    "first_detectable_event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ordinal",
+        "event_type",
+        "event_sha256"
+      ],
+      "properties": {
+        "ordinal": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "event_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "event_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "adjudicator": {
+      "type": "string",
+      "enum": [
+        "user",
+        "external_evidence",
+        "domain_rule"
+      ]
+    },
+    "expected_intervention": {
+      "type": "string",
+      "enum": [
+        "continue",
+        "remind",
+        "ask",
+        "block",
+        "continue_verification"
+      ]
+    },
+    "isolation_reexecution_required": {
+      "type": "boolean"
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw_transcript_copied",
+        "hidden_reasoning_retained",
+        "secret_scan"
+      ],
+      "properties": {
+        "raw_transcript_copied": {
+          "const": false
+        },
+        "hidden_reasoning_retained": {
+          "const": false
+        },
+        "secret_scan": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "not_applicable"
+          ]
+        }
+      }
+    }
+  }
+}

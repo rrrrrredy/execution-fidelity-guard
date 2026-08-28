@@ -1,0 +1,14 @@
+{
+  "session_id": "demo-session",
+  "transcript_path": null,
+  "cwd": "/workspace/demo",
+  "hook_event_name": "PreToolUse",
+  "model": "demo-model",
+  "permission_mode": "default",
+  "turn_id": "demo-turn",
+  "tool_name": "Bash",
+  "tool_use_id": "demo-tool",
+  "tool_input": {
+    "command": "pip install pytest"
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ExecutionFidelityEvidenceRecord",
+  "description": "Contract-bound wrapper around a minimal evidence reference.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "evidence_ref",
+    "contract_ref",
+    "contract_version",
+    "requirement_refs",
+    "evidence"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "evidence_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "contract_ref": {
+      "type": "string",
+      "minLength": 1
+    },
+    "contract_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "requirement_refs": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^requirement:[0-9]+:[a-f0-9]{16}$"
+      }
+    },
+    "evidence": {
+      "$ref": "./evidence-reference.schema.json"
+    }
+  }
+}

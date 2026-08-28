@@ -1,0 +1,18 @@
+{
+  "session_id": "demo-session",
+  "transcript_path": null,
+  "cwd": "/workspace/demo",
+  "hook_event_name": "PostToolUse",
+  "model": "demo-model",
+  "permission_mode": "default",
+  "turn_id": "demo-turn",
+  "tool_name": "Bash",
+  "tool_use_id": "demo-test",
+  "tool_input": {
+    "command": "node --test"
+  },
+  "tool_response": {
+    "exit_code": 0,
+    "output": "tests passed"
+  }
+}

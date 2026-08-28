@@ -1,0 +1,54 @@
+name: Bug report
+description: Report a guard decision, portability issue, or false positive.
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not paste credentials, private transcripts, or unredacted user content. Security-sensitive bypasses belong in a private vulnerability report.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      placeholder: v0.1.0
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Mode
+      options:
+        - shadow
+        - balanced
+        - off
+    validations:
+      required: true
+  - type: textarea
+    id: event
+    attributes:
+      label: Minimal redacted event
+      description: Include the Hook event name, tool name, normalized action, and structured rule. Remove command content and identifiers unless essential.
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      placeholder: Codex desktop on Windows, Codex CLI on macOS, or Codex IDE
+    validations:
+      required: true

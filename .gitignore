@@ -1,0 +1,14 @@
+node_modules/
+coverage/
+dist/
+.DS_Store
+*.log
+
+# Runtime state belongs in PLUGIN_DATA, never in the source tree.
+.runtime/
+
+# Private evaluation indexes and reconstructed inputs stay local.
+evals/private/
+
+# Exact upstream task inputs remain frozen locally and are never published.
+docs/frozen/

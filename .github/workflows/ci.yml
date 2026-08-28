@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: ${{ matrix.os }} / Node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+        node:
+          - 20
+          - 22
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Unit and regression tests
+        run: node --test
+
+      - name: Synchronized package assets
+        run: node scripts/sync-package-assets.mjs --check
+
+      - name: Frozen replay evidence boundary
+        run: node scripts/audit-replay-coverage.mjs --check
+
+      - name: Market release package
+        run: node scripts/validate-release.mjs
+
+      - name: Source-only doctor
+        run: node plugins/execution-fidelity-guard/bin/efg.mjs doctor --json
+
+      - name: Source-only prohibited-install simulation
+        run: node plugins/execution-fidelity-guard/bin/efg.mjs check --mode balanced --event examples/events/pre-tool-install.json --contract examples/contracts/no-local-install.json
+
+      - name: Package contents dry run
+        run: npm pack --dry-run --ignore-scripts

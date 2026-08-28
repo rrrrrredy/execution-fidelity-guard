@@ -1,0 +1,73 @@
+{
+  "name": "execution-fidelity-guard",
+  "version": "0.1.0",
+  "private": false,
+  "description": "Local-first Codex plugin for deterministic task-contract gates and evidence-aware completion checks.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "author": {
+    "name": "rrrrrredy",
+    "url": "https://github.com/rrrrrredy"
+  },
+  "homepage": "https://github.com/rrrrrredy/execution-fidelity-guard#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rrrrrredy/execution-fidelity-guard.git"
+  },
+  "bugs": {
+    "url": "https://github.com/rrrrrredy/execution-fidelity-guard/issues"
+  },
+  "keywords": [
+    "codex",
+    "plugin",
+    "hooks",
+    "task-contract",
+    "execution-safety"
+  ],
+  "bin": {
+    "efg": "./plugins/execution-fidelity-guard/bin/efg.mjs"
+  },
+  "files": [
+    ".agents/plugins/marketplace.json",
+    "plugins/execution-fidelity-guard",
+    "README.md",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "LICENSE",
+    "NOTICE",
+    "PRIVACY.md",
+    "SECURITY.md",
+    "docs/action-rules.md",
+    "docs/architecture.md",
+    "docs/integration-contract.md",
+    "docs/limitations.md",
+    "docs/product-decisions.md",
+    "docs/platform/codex-capability-2026-08-28.md",
+    "examples",
+    "evals/README.md",
+    "evals/measurement-protocol.md",
+    "evals/replay-case.schema.json",
+    "evals/replay-manifest.json",
+    "evals/replay-coverage.json",
+    "evals/manual-decision.schema.json",
+    "evals/inventory-audit-2026-08-28.md",
+    "evals/hook-latency-windows-2026-08-28.json"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "doctor": "node plugins/execution-fidelity-guard/bin/efg.mjs doctor",
+    "sync:package-assets": "node scripts/sync-package-assets.mjs --write",
+    "check:package-assets": "node scripts/sync-package-assets.mjs --check",
+    "freeze:upstream": "node scripts/freeze-upstream.mjs",
+    "index:sessions": "node scripts/index-sessions.mjs",
+    "review:queue": "node scripts/build-private-review-queue.mjs",
+    "discover:prohibited-install": "node scripts/discover-prohibited-installs.mjs",
+    "materialize:manifest": "node scripts/materialize-replay-manifest.mjs",
+    "audit:replay": "node scripts/audit-replay-coverage.mjs --check",
+    "benchmark:hook": "node scripts/benchmark-hook.mjs",
+    "validate": "node scripts/validate-release.mjs",
+    "test": "node --test"
+  }
+}

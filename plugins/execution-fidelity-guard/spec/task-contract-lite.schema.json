@@ -1,0 +1,150 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TaskContractLite",
+  "description": "Seven-field fallback task contract used only when no intent provider is available.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "objective",
+    "primary_object",
+    "delivery_surface",
+    "scope",
+    "must_and_must_not",
+    "authorization",
+    "completion_evidence"
+  ],
+  "properties": {
+    "objective": {
+      "type": "string",
+      "minLength": 1
+    },
+    "primary_object": {
+      "type": "string",
+      "minLength": 1
+    },
+    "delivery_surface": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "include",
+        "exclude"
+      ],
+      "properties": {
+        "include": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "exclude": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "must_and_must_not": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "must",
+        "must_not"
+      ],
+      "properties": {
+        "must": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "must_not": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allowed",
+        "requires_user",
+        "forbidden"
+      ],
+      "properties": {
+        "allowed": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "requires_user": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "forbidden": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "completion_evidence": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "requirement",
+          "acceptable_sources"
+        ],
+        "properties": {
+          "requirement": {
+            "type": "string",
+            "minLength": 1
+          },
+          "acceptable_sources": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "enum": [
+                "file",
+                "command",
+                "test",
+                "api",
+                "database",
+                "real_page",
+                "release",
+                "user"
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}
