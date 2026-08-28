@@ -114,6 +114,10 @@ export function buildCoverageReport(manifest) {
   };
 }
 
+export function normalizeLineEndings(value) {
+  return value.replace(/\r\n/g, "\n");
+}
+
 function parseArgs(values) {
   const options = {};
   for (let index = 0; index < values.length; index += 1) {
@@ -147,7 +151,7 @@ async function main() {
   }
   if (options.check) {
     const current = await readFile(outputPath, "utf8");
-    if (current !== serialized) {
+    if (normalizeLineEndings(current) !== serialized) {
       throw new Error("replay coverage report is stale; run with --write");
     }
     process.stdout.write("Replay coverage report is current.\n");

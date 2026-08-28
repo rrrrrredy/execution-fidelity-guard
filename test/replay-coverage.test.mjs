@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
-import { buildCoverageReport } from "../scripts/audit-replay-coverage.mjs";
+import {
+  buildCoverageReport,
+  normalizeLineEndings,
+} from "../scripts/audit-replay-coverage.mjs";
 import { projectRoot } from "../test-support/helpers.mjs";
 
 test("public replay report preserves the evidence boundary", async () => {
@@ -41,4 +44,9 @@ test("public replay report preserves the evidence boundary", async () => {
         typeof item.source.rollout_sha256 === "string",
     ),
   );
+});
+
+test("replay coverage freshness ignores checkout line-ending conversion", () => {
+  const serialized = "{\n  \"ok\": true\n}\n";
+  assert.equal(normalizeLineEndings(serialized.replace(/\n/g, "\r\n")), serialized);
 });
