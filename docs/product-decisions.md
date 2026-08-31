@@ -36,7 +36,7 @@ caused by verified Codex behavior.
 | PostToolUse can correct failed execution | It records and feeds back failure but never claims rollback. | Side effects have already occurred. |
 | Stop prevents false completion | It verifies only explicit completion or delivery signals and can continue at most twice per session and contract in one shared local state root. | Stop is a turn boundary, not a goal-completion event, and the counter is not cross-machine state. |
 | Optional MCP in MVP | Start with local files and hook entry points. Add a bundled MCP server only when an actual intent or continuity provider needs a structured runtime bridge. | An empty MCP surface adds operational failure without product value. |
-| Deterministic continue p95 target | Keep the official command-Hook path for v0.2.0 and publish the measured miss instead of adding a persistent MCP process only to hide Node cold start. | The 2026-08-31 local Windows p95 was 172.02 ms with persistence disabled versus the provisional 100 ms target; a new long-lived server would add lifecycle and tool-surface risk without an installed integration test. |
+| Deterministic continue p95 target | Keep the official command-Hook path for v0.2.1, lazy-load event-specific and persistence modules, and publish the measured miss instead of adding a persistent MCP process only to hide Node cold start. | The final local Windows p95 was 296.05 ms with persistence disabled; an empty Node process measured 189.73 ms p95 in the same run. Both leave the full path above the provisional 100 ms target, while a new long-lived server would add lifecycle and tool-surface risk without an installed integration test. |
 
 ## Reject
 

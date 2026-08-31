@@ -56,3 +56,26 @@ The prohibited-install discovery utility is lexical routing only. A human
 adjudicator must distinguish a forbidden product/plugin install from allowed
 dependency setup, documentation examples, and read-only searches before a case
 can be confirmed.
+
+## Shadow pilot aggregation
+
+`scripts/summarize-shadow-pilot.mjs` aggregates exported Guard receipt bundles
+without reading transcripts, prompts, commands, or tool output. It rejects
+duplicate pseudonymous sessions and receipts, freezes each input file by
+SHA-256, and reports progress toward a caller-selected task-session target.
+It does not install the plugin, record Hook events, create sessions, or
+simulate a pilot; collect the inputs from real plugin-enabled Host tasks first.
+
+    node scripts/summarize-shadow-pilot.mjs --input PRIVATE_RECEIPT_DIRECTORY --output shadow-pilot.json --target 100
+
+The input directory must contain only direct `.json` receipt exports produced by
+`efg receipts export`; symlinks, non-regular files, oversized files, and more
+than 1,000 bundles are rejected. Keep the input private. The summary publishes
+only aggregate counts and bundle hashes.
+
+The sample gate is logistical evidence, not efficacy evidence. A receipt cannot
+prove that its session was a real independently sampled user task. Human or
+external adjudication is still required for precision and false-positive
+claims, while controlled re-execution is required for rework, user-time,
+acceptance, and outcome claims. The output shape is frozen in
+`evals/shadow-pilot-summary.schema.json`.

@@ -7,19 +7,9 @@ import {
   toEventType,
 } from "./canonical.mjs";
 import { classifyToolAction } from "./classify.mjs";
-import { assessStop } from "./completion.mjs";
 import { loadConfig } from "./config.mjs";
 import { compactContractContext, loadContract } from "./contract.mjs";
-import { deriveEvidence } from "./evidence.mjs";
 import { decidePreTool, messageForDecision } from "./policy.mjs";
-import {
-  bestEffort,
-  deleteSession,
-  pruneExpiredSessions,
-  readRecords,
-  transitionStopState,
-  writeRecord,
-} from "./store.mjs";
 
 const SUPPORTED_EVENTS = new Set([
   "SessionStart",
@@ -34,6 +24,27 @@ const SUPPORTED_EVENTS = new Set([
   "Stop",
   "SessionEnd",
 ]);
+
+async function bestEffort(operation) {
+  try {
+    return await operation();
+  } catch {
+    return null;
+  }
+}
+
+function loadStore(config, eventName) {
+  return config.persist ||
+    (eventName === "SessionEnd" && config.deleteOnSessionEnd)
+    ? import("./store.mjs")
+    : null;
+}
+
+function loadEventModule(eventName) {
+  if (eventName === "PostToolUse") return import("./evidence.mjs");
+  if (eventName === "Stop") return import("./completion.mjs");
+  return null;
+}
 
 function contractIdentity(binding) {
   return binding.status === "bound"
@@ -211,19 +222,27 @@ function contractSessionContext(binding, sessionId) {
   return (prefix + compactContractContext(binding)).slice(0, 1200);
 }
 
-async function stopDecision({ input, binding, config, sessionId, now }) {
-  const evidenceRecords = await bestEffort(() =>
-    readRecords(config, sessionId, "evidence"),
-  );
+async function stopDecision({
+  input,
+  binding,
+  config,
+  sessionId,
+  now,
+  store,
+  assessStop,
+}) {
+  const evidenceRecords = store
+    ? await bestEffort(() => store.readRecords(config, sessionId, "evidence"))
+    : [];
   const assessment = assessStop(
     binding,
     evidenceRecords ?? [],
     input.last_assistant_message,
   );
   if (!assessment.shouldVerify || assessment.complete) {
-    if (assessment.complete) {
+    if (assessment.complete && store) {
       await bestEffort(() =>
-        transitionStopState(config, sessionId, () => ({
+        store.transitionStopState(config, sessionId, () => ({
           state: {
             schema_version: "1.0",
             contract_ref: binding.envelope.contract_ref,
@@ -246,7 +265,7 @@ async function stopDecision({ input, binding, config, sessionId, now }) {
   let transition;
   if (config.persist) {
     transition = await bestEffort(() =>
-      transitionStopState(config, sessionId, (prior) => {
+      store.transitionStopState(config, sessionId, (prior) => {
         const sameContract =
           prior?.contract_ref === binding.envelope.contract_ref &&
           prior?.contract_version === binding.envelope.contract_version;
@@ -333,17 +352,22 @@ export async function handleHook(input, options = {}) {
 
   const now = options.now ? new Date(options.now) : new Date();
   const config = options.config ?? loadConfig(input, options.env);
-  const binding =
-    options.binding ?? (await loadContract(input, { env: options.env }));
+  const [binding, store, eventModule] = await Promise.all([
+    options.binding ?? loadContract(input, { env: options.env }),
+    loadStore(config, eventName),
+    loadEventModule(eventName),
+  ]);
   const sessionId = String(input.session_id || "unknown");
-  if (eventName === "SessionStart") {
-    await bestEffort(() => pruneExpiredSessions(config, now));
+  if (eventName === "SessionStart" && store) {
+    await bestEffort(() => store.pruneExpiredSessions(config, now));
   }
   const action = ["PreToolUse", "PermissionRequest", "PostToolUse"].includes(eventName)
     ? classifyToolAction(input)
     : null;
   const event = normalizedEvent(input, binding, action, now);
-  await bestEffort(() => writeRecord(config, sessionId, "events", event));
+  if (store) {
+    await bestEffort(() => store.writeRecord(config, sessionId, "events", event));
+  }
 
   let decision = continueDecision({
     coverage: binding.status === "bound" ? "observed" : "partial",
@@ -381,10 +405,18 @@ export async function handleHook(input, options = {}) {
     decision = decidePreTool({ binding, action, mode: config.mode });
     output = permissionOutput(decision, binding, action);
   } else if (eventName === "PostToolUse") {
-    const evidenceRecord = deriveEvidence(input, event, binding, action, now);
-    await bestEffort(() =>
-      writeRecord(config, sessionId, "evidence", evidenceRecord),
+    const evidenceRecord = eventModule.deriveEvidence(
+      input,
+      event,
+      binding,
+      action,
+      now,
     );
+    if (store) {
+      await bestEffort(() =>
+        store.writeRecord(config, sessionId, "evidence", evidenceRecord),
+      );
+    }
     if (evidenceRecord.evidence.status === "fail") {
       const message =
         "Execution Fidelity Guard recorded a failed tool result. Treat it as contradictory evidence and continue verification before claiming completion.";
@@ -416,15 +448,21 @@ export async function handleHook(input, options = {}) {
       config,
       sessionId,
       now,
+      store,
+      assessStop: eventModule.assessStop,
     });
     decision = result.decision;
     output = result.output;
   }
 
   const receipt = receiptFor(event, decision, now, Date.now() - startedAt);
-  await bestEffort(() => writeRecord(config, sessionId, "receipts", receipt));
-  if (eventName === "SessionEnd" && config.deleteOnSessionEnd) {
-    await bestEffort(() => deleteSession(config, sessionId));
+  if (store) {
+    await bestEffort(() =>
+      store.writeRecord(config, sessionId, "receipts", receipt),
+    );
+  }
+  if (eventName === "SessionEnd" && config.deleteOnSessionEnd && store) {
+    await bestEffort(() => store.deleteSession(config, sessionId));
   }
   return output;
 }

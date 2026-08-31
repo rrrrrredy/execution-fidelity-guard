@@ -11,14 +11,16 @@ commit passes all three public CI runners. Installed-client behavior and
 latency on macOS and Linux remain unverified.
 
 A cross-Host version is also worth doing, but as a host-neutral core plus thin
-adapters. Do not market the current Codex plugin as universal. Keep the current
-Codex package stable, then build DeepSeek Harness as the first separate adapter.
+adapters after the Codex evidence gate. Do not market the current Codex plugin
+as universal, and do not turn architectural fit into a compatibility claim.
+DeepSeek Harness should be the first separate adapter only after the real
+shadow and controlled-evaluation gates below.
 
 | Host | Decision | Current state |
 |---|---|---|
-| Codex CLI and supported desktop plugin surfaces | Ship 0.2.0 | Implemented; installed-client delivery remains unverified in this release process |
+| Codex CLI and supported desktop plugin surfaces | Ship 0.2.1 | Implemented; installed-client delivery remains unverified in this release process |
 | Codex IDE extension | Do not target yet | The Host does not currently support plugins |
-| DeepSeek Harness | Build next, behind a real integration gate | Strong architectural fit; no adapter exists today |
+| DeepSeek Harness | Prepare the adapter design; do not ship yet | Strong architectural fit; no adapter exists and Codex efficacy gates remain open |
 | Other Agent Hosts | Wait for evidence of demand | Avoid a lowest-common-denominator API before one second adapter proves the boundary |
 
 ## DeepSeek Harness fit
@@ -63,11 +65,17 @@ would violate the community requirement for an actual Harness integration.
 
 ## Go gate
 
-Proceed after Codex 0.2.0 is public and its exact commit is green on the three
-OS runners. The first DSH release must also have a real Harness execution trace
-and must keep the same read-only relationship to Intent Loop and Continuity.
-Until then, describe the project as suitable for the ecosystem, not as already
-compatible with it.
+Do not start a cross-Host product release merely because Codex 0.2.1 is public.
+First require its exact commit to pass the three OS runners, complete the real
+100-session shadow pilot with independent adjudication, and run the PRD's
+controlled 800-task comparison without crossing the false-block, user-time, or
+exploration-loss limits. A bounded, unpublished DSH feasibility spike may
+validate event semantics after the shadow gate, but it is not a product release.
+
+The first DSH release must then have a real Harness execution trace, pin tested
+Harness versions, and keep the same read-only relationship to Intent Loop and
+Continuity. Until those gates pass, describe the project as suitable for the
+ecosystem, not as already compatible with it.
 
 Official references:
 

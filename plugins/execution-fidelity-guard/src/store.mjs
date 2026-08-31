@@ -22,26 +22,23 @@ const SESSION_DIRECTORY_RE = /^session-[a-f0-9]{64}$/;
 const STOP_LOCK_STALE_MS = 30000;
 const STOP_LOCK_ATTEMPTS = 50;
 const STOP_LOCK_MAX_BYTES = 4096;
+const STOP_LOCK_RECLAIM_DEPTH = 8;
 const STOP_LOCK_HOST = hostname();
 const MAX_RECORD_BYTES = 1024 * 1024;
 const MAX_STOP_STATE_BYTES = 64 * 1024;
 
 function sessionRoot(config, sessionId) {
+  return path.join(sessionsRoot(config), sessionDirectoryName(sessionId));
+}
+
+function sessionDirectoryName(sessionId) {
   const value = String(sessionId ?? "unknown");
   const reference = value.match(/^session:([a-f0-9]{64})$/);
-  return path.join(
-    sessionsRoot(config),
-    "session-" + (reference ? reference[1] : sha256(value)),
-  );
+  return "session-" + (reference ? reference[1] : sha256(value));
 }
 
 function sessionsRoot(config) {
   return path.resolve(config.stateRoot, "sessions");
-}
-
-function comparablePath(value) {
-  const normalized = path.resolve(value).replace(/^\\\\\?\\/, "");
-  return process.platform === "win32" ? normalized.toLowerCase() : normalized;
 }
 
 async function inspectDirectoryChain(directory, label) {
@@ -58,36 +55,31 @@ async function inspectDirectoryChain(directory, label) {
     try {
       info = await lstat(current);
     } catch (error) {
-      if (error?.code === "ENOENT") return false;
+      if (error?.code === "ENOENT") return null;
       throw error;
     }
     if (info.isSymbolicLink() || !info.isDirectory()) {
       throw new Error(label + " contains a link or non-directory component");
     }
   }
-  const canonical = await realpath(resolved);
-  if (comparablePath(canonical) !== comparablePath(resolved)) {
-    throw new Error(label + " resolves outside its dedicated path");
-  }
-  return true;
+  return path.resolve(await realpath(resolved));
 }
 
 async function validatedDirectory(directory, label) {
-  return (await inspectDirectoryChain(directory, label))
-    ? path.resolve(directory)
-    : null;
+  return inspectDirectoryChain(directory, label);
 }
 
 async function ensureDirectory(directory, label) {
   const resolved = path.resolve(directory);
-  const exists = await inspectDirectoryChain(resolved, label);
-  if (!exists) {
+  let canonical = await inspectDirectoryChain(resolved, label);
+  if (!canonical) {
     await mkdir(resolved, { recursive: true, mode: 0o700 });
-    if (!(await inspectDirectoryChain(resolved, label))) {
+    canonical = await inspectDirectoryChain(resolved, label);
+    if (!canonical) {
       throw new Error(label + " could not be created safely");
     }
   }
-  return resolved;
+  return canonical;
 }
 
 async function validatedSessionsRoot(config) {
@@ -104,7 +96,7 @@ async function ensureSessionsRoot(config) {
 async function validatedSessionRoot(config, sessionId) {
   const root = await validatedSessionsRoot(config);
   if (!root) return null;
-  const target = path.resolve(sessionRoot(config, sessionId));
+  const target = path.resolve(root, sessionDirectoryName(sessionId));
   if (
     path.dirname(target) !== root ||
     !SESSION_DIRECTORY_RE.test(path.basename(target))
@@ -116,7 +108,7 @@ async function validatedSessionRoot(config, sessionId) {
 
 async function ensureSessionRoot(config, sessionId) {
   const root = await ensureSessionsRoot(config);
-  const target = path.resolve(sessionRoot(config, sessionId));
+  const target = path.resolve(root, sessionDirectoryName(sessionId));
   if (
     path.dirname(target) !== root ||
     !SESSION_DIRECTORY_RE.test(path.basename(target))
@@ -172,7 +164,7 @@ export async function writeRecord(config, sessionId, bucket, record) {
   await atomicWrite(filePath, record);
   await pruneBucket(directory, config.maxRecordsPerBucket);
   const activeAt = new Date();
-  await utimes(sessionRoot(config, sessionId), activeAt, activeAt).catch(() => {});
+  await utimes(sessionDirectory, activeAt, activeAt).catch(() => {});
   return filePath;
 }
 
@@ -255,7 +247,7 @@ export async function writeStopState(config, sessionId, state) {
   const filePath = path.join(directory, "stop-state.json");
   await atomicWrite(filePath, state);
   const activeAt = new Date();
-  await utimes(sessionRoot(config, sessionId), activeAt, activeAt).catch(() => {});
+  await utimes(directory, activeAt, activeAt).catch(() => {});
 }
 
 function processIsAlive(pid) {
@@ -306,6 +298,105 @@ async function readStopLockOwner(lockPath) {
   return { info, owner };
 }
 
+async function releaseOwnedLockFile(filePath, owner, handle) {
+  await handle?.close().catch(() => {});
+  try {
+    const current = await readStopLockOwner(filePath);
+    if (current.owner.token !== owner.token) return;
+    const releasedPath =
+      filePath + ".released-" + safeId(owner.token);
+    await rename(filePath, releasedPath);
+    await unlink(releasedPath).catch(() => {});
+  } catch (error) {
+    if (error?.code !== "ENOENT") {
+      // Fail closed: never remove a lock whose current owner is uncertain.
+    }
+  }
+}
+
+async function acquireStopLockReclaimClaim(lockPath, staleOwner, owner) {
+  let generation = sha256(staleOwner.token);
+  for (let depth = 0; depth < STOP_LOCK_RECLAIM_DEPTH; depth += 1) {
+    const claimPath = lockPath + ".reclaim-" + generation;
+    let claimHandle = null;
+    try {
+      claimHandle = await open(claimPath, "wx", 0o600);
+      await claimHandle.writeFile(JSON.stringify(owner) + "\n", "utf8");
+      await claimHandle.sync();
+      return { claimHandle, claimPath };
+    } catch (error) {
+      if (claimHandle) {
+        await claimHandle.close().catch(() => {});
+        await unlink(claimPath).catch(() => {});
+        claimHandle = null;
+      }
+      if (error?.code !== "EEXIST") throw error;
+      let currentClaim;
+      try {
+        currentClaim = await readStopLockOwner(claimPath);
+      } catch (claimError) {
+        if (["ENOENT", "ELOCKUNREADY"].includes(claimError?.code)) {
+          return null;
+        }
+        throw claimError;
+      }
+      const stale =
+        Date.now() - currentClaim.info.mtimeMs > STOP_LOCK_STALE_MS;
+      const knownDeadLocalOwner =
+        currentClaim.owner.host === STOP_LOCK_HOST &&
+        !processIsAlive(currentClaim.owner.pid);
+      if (!stale || !knownDeadLocalOwner) return null;
+      generation = sha256(
+        generation + "\n" + currentClaim.owner.token,
+      );
+    }
+  }
+  return null;
+}
+
+async function reclaimStaleStopLock(lockPath, expected, owner) {
+  const claim = await acquireStopLockReclaimClaim(
+    lockPath,
+    expected.owner,
+    owner,
+  );
+  if (!claim) return false;
+  try {
+    const current = await readStopLockOwner(lockPath);
+    const stale = Date.now() - current.info.mtimeMs > STOP_LOCK_STALE_MS;
+    const knownDeadLocalOwner =
+      current.owner.host === STOP_LOCK_HOST &&
+      !processIsAlive(current.owner.pid);
+    if (
+      current.owner.token !== expected.owner.token ||
+      !stale ||
+      !knownDeadLocalOwner
+    ) {
+      return false;
+    }
+    const stalePath =
+      lockPath +
+      ".stale-" +
+      sha256(expected.owner.token + "\n" + owner.token);
+    await rename(lockPath, stalePath);
+    const moved = await readStopLockOwner(stalePath);
+    if (moved.owner.token !== expected.owner.token) {
+      throw new Error("stop state lock changed during stale reclamation");
+    }
+    await unlink(stalePath);
+    return true;
+  } catch (error) {
+    if (["ENOENT", "ELOCKUNREADY"].includes(error?.code)) return false;
+    throw error;
+  } finally {
+    await releaseOwnedLockFile(
+      claim.claimPath,
+      owner,
+      claim.claimHandle,
+    );
+  }
+}
+
 async function withStopStateLock(config, sessionId, operation) {
   const directory = await ensureSessionRoot(config, sessionId);
   const lockPath = path.join(directory, "stop-state.lock");
@@ -341,11 +432,9 @@ async function withStopStateLock(config, sessionId, operation) {
           current.owner.host === STOP_LOCK_HOST &&
           !processIsAlive(current.owner.pid);
         if (stale && knownDeadLocalOwner) {
-          const stalePath =
-            lockPath + ".stale-" + safeId(owner.token);
-          await rename(lockPath, stalePath);
-          await unlink(stalePath).catch(() => {});
-          continue;
+          if (await reclaimStaleStopLock(lockPath, current, owner)) {
+            continue;
+          }
         }
       } catch (lockError) {
         if (!["ENOENT", "ELOCKUNREADY"].includes(lockError?.code)) {
@@ -359,20 +448,7 @@ async function withStopStateLock(config, sessionId, operation) {
   try {
     return await operation();
   } finally {
-    await handle.close().catch(() => {});
-    try {
-      const current = await readStopLockOwner(lockPath);
-      if (current.owner.token === owner.token) {
-        const releasedPath =
-          lockPath + ".released-" + safeId(owner.token);
-        await rename(lockPath, releasedPath);
-        await unlink(releasedPath).catch(() => {});
-      }
-    } catch (error) {
-      if (error?.code !== "ENOENT") {
-        // Fail closed: never remove a lock whose current owner is uncertain.
-      }
-    }
+    await releaseOwnedLockFile(lockPath, owner, handle);
   }
 }
 
@@ -394,7 +470,7 @@ export async function transitionStopState(config, sessionId, transition) {
 export async function deleteSession(config, sessionId) {
   const root = await validatedSessionsRoot(config);
   if (!root) return false;
-  const target = path.resolve(sessionRoot(config, sessionId));
+  const target = path.resolve(root, sessionDirectoryName(sessionId));
   if (
     path.dirname(target) !== root ||
     !SESSION_DIRECTORY_RE.test(path.basename(target))

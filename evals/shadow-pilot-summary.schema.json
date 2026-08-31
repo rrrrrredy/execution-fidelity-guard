@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Execution Fidelity Guard Shadow Pilot Summary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "generated_at",
+    "input",
+    "sessions",
+    "sample_gate",
+    "observations",
+    "claim_boundary"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "kind": { "const": "execution-fidelity-guard-shadow-pilot-summary" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bundle_count", "bundle_sha256", "cohort_sha256"],
+      "properties": {
+        "bundle_count": { "type": "integer", "minimum": 1, "maximum": 1000 },
+        "bundle_sha256": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1000,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+        },
+        "cohort_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "sessions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unique", "with_pre_tool_use", "with_stop", "with_shadow_candidate"],
+      "properties": {
+        "unique": { "type": "integer", "minimum": 1 },
+        "with_pre_tool_use": { "type": "integer", "minimum": 0 },
+        "with_stop": { "type": "integer", "minimum": 0 },
+        "with_shadow_candidate": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "sample_gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target_sessions", "reached", "remaining"],
+      "properties": {
+        "target_sessions": { "type": "integer", "minimum": 1 },
+        "reached": { "type": "boolean" },
+        "remaining": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "observations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "events",
+        "receipts",
+        "decisions",
+        "coverage",
+        "reasons",
+        "shadow_candidates",
+        "runtime_decision_latency_ms"
+      ],
+      "properties": {
+        "events": { "type": "integer", "minimum": 0 },
+        "receipts": { "type": "integer", "minimum": 0 },
+        "decisions": { "$ref": "#/$defs/counts" },
+        "coverage": { "$ref": "#/$defs/counts" },
+        "reasons": { "$ref": "#/$defs/counts" },
+        "shadow_candidates": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["would_block", "would_ask"],
+          "properties": {
+            "would_block": { "type": "integer", "minimum": 0 },
+            "would_ask": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "runtime_decision_latency_ms": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["p50", "p95", "max"],
+          "properties": {
+            "p50": { "type": ["number", "null"], "minimum": 0 },
+            "p95": { "type": ["number", "null"], "minimum": 0 },
+            "max": { "type": ["number", "null"], "minimum": 0 }
+          }
+        }
+      }
+    },
+    "claim_boundary": {
+      "type": "array",
+      "minItems": 4,
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "$defs": {
+    "counts": {
+      "type": "object",
+      "additionalProperties": { "type": "integer", "minimum": 1 }
+    }
+  }
+}

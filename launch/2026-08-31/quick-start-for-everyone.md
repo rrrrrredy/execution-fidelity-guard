@@ -26,7 +26,7 @@ demo 会展示一次放行和一次拦截，不会安装插件，也不会修改
 
 在确认源码和 Hook 命令后运行：
 
-    codex plugin marketplace add rrrrrredy/execution-fidelity-guard --ref v0.2.0
+    codex plugin marketplace add rrrrrredy/execution-fidelity-guard --ref v0.2.1
     codex plugin add execution-fidelity-guard@execution-fidelity-guard
 
 然后新开一个 Codex 任务，告诉它使用 execution-fidelity Skill，并说清楚目标、不能做的事、交付时要看到什么证据。第一次建议保留默认 shadow 模式，先观察它会在哪些地方提醒或拦截。

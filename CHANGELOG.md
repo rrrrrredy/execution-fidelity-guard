@@ -2,6 +2,46 @@
 
 All notable changes follow semantic versioning.
 
+## 0.2.1 - 2026-08-31
+
+### Added
+
+- A dependency-free shadow-pilot summarizer that rejects duplicate sessions,
+  events, one-event-to-many-receipt mappings, unknown reason codes, and
+  receipts; freezes each pseudonymous export by SHA-256; and reports progress
+  toward a caller-selected real-session target.
+- A machine-readable shadow-pilot summary schema with explicit sampling and
+  efficacy claim boundaries.
+- An optional empty-Node process-floor diagnostic in the Hook benchmark.
+
+### Changed
+
+- Persistence, evidence, and completion modules are loaded only for events that
+  use them, reducing unnecessary work on the no-persistence continue path.
+- SessionEnd still honors exact-session deletion when event persistence is off.
+- State paths accept verified non-link Windows 8.3 aliases after
+  canonicalization while link and junction components remain rejected.
+- Concurrent stale Stop-lock recovery now uses an owner-token reclaim claim and
+  revalidates the stale owner before removal, preserving one linearized
+  transition under contention.
+- Release validation now checks the shadow-pilot workflow and the benchmark's
+  process-floor claim boundary.
+- CI now pins checkout and Node setup actions to reviewed v7 commit SHAs.
+- Custom Hook benchmark fixtures report their actual event name.
+- The final Windows source benchmark records 296.05 ms p95 with persistence
+  disabled; the same run's empty-Node process floor was 189.73 ms p95. The
+  provisional 100 ms p95 hypothesis remains unmet.
+
+### Known limits
+
+- No 100-task real shadow cohort or 800-task controlled online comparison has
+  been completed. The aggregator makes collection auditable but is not product
+  efficacy evidence.
+- Installed-client Hook delivery remains deliberately untested on the
+  maintainer's machine.
+- Live Intent Loop, Continuity, DeepSeek Harness, and other Host adapters remain
+  unimplemented.
+
 ## 0.2.0 - 2026-08-31
 
 ### Added

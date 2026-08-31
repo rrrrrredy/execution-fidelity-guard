@@ -1,6 +1,6 @@
 # Intent, continuity, guard, and host integration contract
 
-Status: frozen for Execution Fidelity Guard 0.2.0.
+Status: frozen for Execution Fidelity Guard 0.2.1.
 
 This contract keeps four products from becoming competing sources of truth.
 It describes the interface implemented by this repository and names the
@@ -69,10 +69,10 @@ standalone fallback envelope is rejected so the caller cannot reuse a stale
 ## Version semantics
 
 - Provider documents and bare TaskContractLite inputs use wire schema `1.0`,
-  which runtime 0.2.0 accepts exactly. Continuity snapshots and decision
+  which runtime 0.2.1 accepts exactly. Continuity snapshots and decision
   receipts also remain `1.0`.
 - Guard-owned normalized event and evidence-record outputs use wire schema
-  `2.0` in runtime 0.2.0. The major bump covers new subagent event values,
+  `2.0`, introduced in runtime 0.2.0 and retained in 0.2.1. The major bump covers new subagent event values,
   pseudonymous Host identifier semantics, and artifact attestation that strict
   1.0 consumers cannot safely assume they understand.
 - Package version and wire `schema_version` are independent. Consumers select
@@ -87,7 +87,7 @@ standalone fallback envelope is rejected so the caller cannot reuse a stale
   the same canonical projection is allowed; changing the projection requires a
   larger version.
 - `snapshot_sha256` proves that the current document and projection agree. Guard
-  0.2.0 does not maintain a global version ledger, so it cannot prove that a
+  0.2.1 does not maintain a global version ledger, so it cannot prove that a
   provider never reused a version with a different, newly hashed projection or
   that versions were globally monotonic across erased state.
 - `updated_at` and `source_message_refs` are provenance. They do not override the
@@ -125,7 +125,7 @@ an incomplete allowed list.
 The shipped `continuity-snapshot.schema.json` reserves the smallest future
 Continuity interchange: `contract_ref`, `contract_version`, `phase`,
 `open_commitments`, `evidence_refs`, and `captured_at`, plus schema version.
-Guard 0.2.0 does not load that snapshot and no live Continuity bridge is
+Guard 0.2.1 does not load that snapshot and no live Continuity bridge is
 implemented.
 
 ## Not implemented, not verified, or not guaranteed
@@ -134,7 +134,7 @@ implemented.
   document loading and validation are implemented.
 - No live Continuity producer or consumer bridge has been implemented.
 - No DeepSeek Harness or other non-Codex Host adapter has been implemented or
-  verified; the 0.2.0 package is Codex-specific.
+  verified; the 0.2.1 package is Codex-specific.
 - The plugin was not installed into the maintainer's local Codex environment,
   so installed-client discovery and end-to-end Hook delivery remain unverified.
 - Hosted WebSearch, specialized tools that opt out of Hooks, and later
@@ -148,14 +148,19 @@ implemented.
 - Stop is a turn boundary, not authoritative goal completion.
 - The frozen 41-failure and 40-success inventory proves corpus coverage, not
   81-case runtime accuracy, false-positive rate, or outcome improvement.
-- The measured Windows source continue path was 172.02 ms p95 with persistence
-  disabled, missing the provisional 100 ms target. Installed-client, macOS, and
-  Linux latency have not been measured.
-- There is no semantic model in 0.2.0, and natural-language rules cannot become
+- The measured Windows source continue path was 296.05 ms p95 with persistence
+  disabled; an empty Node process measured 189.73 ms p95 in the same run. The
+  process floor is diagnostic only, the full path misses the provisional 100 ms
+  target, and installed-client, macOS, and Linux latency remain unmeasured.
+- No 100-task real shadow cohort or 800-task controlled online comparison has
+  been completed. The shipped aggregator freezes receipt bundles and counts
+  sessions; it does not establish real sampling, accuracy, efficacy, or outcome
+  improvement without adjudication and controlled execution.
+- There is no semantic model in 0.2.1, and natural-language rules cannot become
   hard blocks by themselves.
 - Objective, primary-object, delivery-surface, scope, and must fields are
-  bounded Agent context, not deterministic gate inputs in 0.2.0. Cost is not
-  represented in the 0.2.0 input schema and is not gated.
+  bounded Agent context, not deterministic gate inputs in 0.2.1. Cost is not
+  represented in the 0.2.1 input schema and is not gated.
 - `artifact_observed` evidence proves only which local file bytes Guard
   read and hashed. The status and semantic sufficiency remain caller claims;
   label-plus-digest evidence remains fully caller-attested.

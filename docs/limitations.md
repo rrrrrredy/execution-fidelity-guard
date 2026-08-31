@@ -27,18 +27,20 @@ Execution Fidelity Guard reduces a narrow class of execution drift. It cannot pr
   not prove the claim is true or the artifact is semantically sufficient.
 - CLI evidence supplied as a label plus digest remains caller-attested.
 - Objective, primary object, delivery surface, scope, and must fields are
-  bounded Agent context, not deterministic gate inputs in 0.2.0. Cost is not
-  represented in the 0.2.0 contract. Hard decisions use explicit structured
+  bounded Agent context, not deterministic gate inputs in 0.2.1. Cost is not
+  represented in the 0.2.1 contract. Hard decisions use explicit structured
   action, tool, or command-prefix rules only.
 - Stop is a turn boundary. A warning after the two-attempt cap is not a completion verdict.
 
 ## Operational limits
 
 - Node.js 20 or later must be available to the Codex process.
-- Command Hooks start a Node process for each event. The 2026-08-28 Windows
-  source benchmark was superseded by a 2026-08-31 snapshot measuring 172.02 ms
-  p95 on the continue path with persistence
-  disabled, above the provisional 100 ms PRD target. Other hosts can differ.
+- Command Hooks start a Node process for each event. The 0.2.1 Windows source
+  snapshot measured 296.05 ms p95 on the continue path with persistence
+  disabled, while an empty Node process in the same run measured 189.73 ms p95.
+  The latter is diagnostic only and is not subtracted from Guard latency. The
+  full path remains above the provisional 100 ms PRD target. Other hosts can
+  differ.
 - State is local to the configured Codex home unless `EFG_STATE_DIR` changes it.
 - With `EFG_PERSIST=false`, later Hook events cannot use evidence from earlier events.
 - Overlapping local Stop processes that share one state root use an exclusive
@@ -58,5 +60,8 @@ Execution Fidelity Guard reduces a narrow class of execution drift. It cannot pr
   access is still outside the security boundary.
 - Windows ACL inheritance is platform-managed; the runtime requests restrictive file modes where the platform supports them.
 - There is no remote dashboard, telemetry service, or cross-machine synchronization.
+- The repository can aggregate pseudonymous receipt bundles toward a shadow
+  sample target, but no 100-task real shadow cohort or 800-task controlled
+  online comparison has been completed for this release.
 
 Use `shadow` mode first and inspect real would-block receipts before enabling `balanced` in consequential workflows.

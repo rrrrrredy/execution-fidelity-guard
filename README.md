@@ -11,10 +11,10 @@ against contract-bound evidence.
 It targets a specific failure: the Agent remembers the broad goal but quietly
 crosses an explicit action or authorization boundary, or claims completion
 without the required evidence. The objective, object, delivery surface, and
-scope fields remain bounded context in 0.2.0; they are not deterministic,
+scope fields remain bounded context in 0.2.1; they are not deterministic,
 path-aware gates.
 
-Version 0.2.0 is an open-source preview. It is usable today, but it is a guardrail, not a sandbox or complete security boundary.
+Version 0.2.1 is an open-source preview. It is usable today, but it is a guardrail, not a sandbox or complete security boundary.
 
 ## What it does
 
@@ -68,7 +68,7 @@ The supported Host surface is Codex CLI and Codex desktop environments where
 plugins are available. The Codex IDE extension does not currently support
 plugins, so this Guard cannot run there.
 
-    codex plugin marketplace add rrrrrredy/execution-fidelity-guard --ref v0.2.0
+    codex plugin marketplace add rrrrrredy/execution-fidelity-guard --ref v0.2.1
     codex plugin add execution-fidelity-guard@execution-fidelity-guard
 
 Start a new Codex task after installation so the Skill and Hooks are discovered. These commands modify local Codex plugin state; they are not needed for source evaluation.
@@ -218,15 +218,15 @@ It does not intentionally retain prompts, full commands, tool outputs, transcrip
 - The Codex IDE extension does not currently support plugins.
 - Shell classification is intentionally conservative and cannot prove arbitrary script behavior.
 - Shell wrappers are inspected only for common direct forms; generated scripts and indirect process launch remain outside the deterministic boundary.
-- The seven-field contract carries objective, object, delivery, and scope context, but 0.2.0 hard decisions use only explicit `action:`, `tool:`, and `command-prefix:` rules.
-- Cost is not represented in the seven-field 0.2.0 contract and is not gated.
+- The seven-field contract carries objective, object, delivery, and scope context, but 0.2.1 hard decisions use only explicit `action:`, `tool:`, and `command-prefix:` rules.
+- Cost is not represented in the seven-field 0.2.1 contract and is not gated.
 - Natural-language rules never become hard blocks without an explicit structured rule.
 - `PostToolUse` cannot undo a side effect that already happened.
 - A Stop event is a turn boundary, not authoritative task completion.
 - Disabling persistence disables evidence continuity between Hook events.
 - CLI evidence can verify artifact bytes and digest, but the supplied status and
   semantic sufficiency remain attestations.
-- No live Intent Loop adapter or Continuity bridge has been integrated in 0.2.0; the provider document is file-based and the Continuity schema is a reserved boundary.
+- No live Intent Loop adapter or Continuity bridge has been integrated in 0.2.1; the provider document is file-based and the Continuity schema is a reserved boundary.
 - The provider hash validates the current projection but cannot prove global version monotonicity across erased state.
 
 Read [docs/limitations.md](docs/limitations.md) before using `balanced` mode.
@@ -246,12 +246,39 @@ efficacy, false-positive rates, and outcome improvement still require isolated
 re-execution and shadow or controlled online comparison. Do not enable
 `balanced` broadly based on the inventory alone.
 
-The full command-Hook process continue path measured p50 146.54 ms and p95
-172.02 ms on one Windows x64 / Node 20.19.1 source checkout with persistence
-disabled. That misses the PRD's provisional 100 ms p95 hypothesis, although it
-remains well inside the configured three-second Hook timeout. See
-[the raw benchmark snapshot](evals/hook-latency-windows-2026-08-31.json) and
-measure on your own host before broad rollout.
+The full command-Hook process continue path measured p50 184.76 ms and p95
+296.05 ms on one Windows x64 / Node 20.19.1 source checkout with persistence
+disabled. In the same run, an empty Node process measured 189.73 ms p95. The
+process floor is diagnostic only and is not subtracted from Guard latency. The
+result misses the PRD's provisional 100 ms p95 hypothesis, although it remains
+inside the configured three-second Hook timeout. See [the raw benchmark
+snapshot](evals/hook-latency-windows-2026-08-31-v0.2.1.json) and measure on your
+own host before broad rollout.
+
+## Run a real shadow pilot
+
+This workflow assumes the plugin is installed on the pilot Host and real Hook
+events have already been recorded. The summarizer does not create or simulate a
+pilot. Keep the default `shadow` mode and persistence enabled. At the end of
+each real task, export that task's pseudonymous receipt bundle into a private
+directory:
+
+    node plugins/execution-fidelity-guard/bin/efg.mjs receipts export --session SESSION --state-dir STATE_DIR --output pilot-receipts/task-001.json
+
+After collecting distinct task sessions, freeze and summarize the cohort:
+
+    npm run pilot:summary -- --input pilot-receipts --output shadow-pilot.json --target 100
+
+The summarizer accepts only regular JSON receipt exports, rejects duplicate
+session and receipt identifiers, hashes every input bundle, and reports the
+remaining sample count plus observed would-block and would-ask decisions. Keep
+the bundles private; do not commit them to this repository.
+
+Reaching 100 pseudonymous sessions does not prove they were independently
+sampled real user tasks. The summary also does not establish precision,
+false-positive rate, rework reduction, or outcome improvement without separate
+user, external-evidence, or domain-rule adjudication. Its machine-readable
+output contract is [evals/shadow-pilot-summary.schema.json](evals/shadow-pilot-summary.schema.json).
 
 ## Development
 
@@ -266,6 +293,7 @@ the packaged source artifact:
     node scripts/verify-packed-artifact.mjs
     npm run verify:packed-execution
     node scripts/benchmark-hook.mjs
+    npm run pilot:summary -- --input PRIVATE_RECEIPT_DIRECTORY
 
 `node --test` writes temporary test state under ignored `.runtime/tests` and
 the suite removes its per-case directories after each run.

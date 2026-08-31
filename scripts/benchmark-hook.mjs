@@ -46,6 +46,17 @@ export function percentile(values, fraction) {
   return sorted[index];
 }
 
+export function benchmarkEventName(event) {
+  if (
+    !event ||
+    typeof event.hook_event_name !== "string" ||
+    !event.hook_event_name
+  ) {
+    throw new Error("benchmark event must include hook_event_name");
+  }
+  return event.hook_event_name;
+}
+
 function round(value) {
   return Math.round(value * 100) / 100;
 }
@@ -79,10 +90,35 @@ function runHook(event, contractPath) {
   return elapsed;
 }
 
+function runNodeProcessFloor() {
+  const started = performance.now();
+  const result = spawnSync(process.execPath, ["-e", ""], {
+    cwd: projectRoot,
+    encoding: "utf8",
+    timeout: 3000,
+    windowsHide: true,
+  });
+  const elapsed = performance.now() - started;
+  if (result.error) throw result.error;
+  if (result.status !== 0 || result.stderr.trim() || result.stdout.trim()) {
+    throw new Error(
+      "Node process-floor benchmark failed: " +
+        (result.stderr.trim() || result.stdout.trim() || "exit " + result.status),
+    );
+  }
+  return elapsed;
+}
+
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const iterations = boundedInteger(options.iterations, 30, 5, 200);
   const warmup = boundedInteger(options.warmup, 5, 0, 50);
+  const floorIterations = boundedInteger(
+    options["floor-iterations"],
+    0,
+    0,
+    200,
+  );
   const eventPath = path.resolve(
     options.event ||
       path.join(projectRoot, "examples", "events", "pre-tool-read.json"),
@@ -92,6 +128,7 @@ async function main() {
       path.join(projectRoot, "examples", "contracts", "no-local-install.json"),
   );
   const event = JSON.parse(await readFile(eventPath, "utf8"));
+  const eventName = benchmarkEventName(event);
   event.cwd = projectRoot;
 
   for (let index = 0; index < warmup; index += 1) {
@@ -101,11 +138,18 @@ async function main() {
   for (let index = 0; index < iterations; index += 1) {
     durations.push(runHook(event, contractPath));
   }
+  const floorDurations = [];
+  if (floorIterations > 0) {
+    for (let index = 0; index < warmup; index += 1) runNodeProcessFloor();
+    for (let index = 0; index < floorIterations; index += 1) {
+      floorDurations.push(runNodeProcessFloor());
+    }
+  }
   const report = {
     schema_version: "1.0",
     measured_at: new Date().toISOString(),
     path: "command_hook_process_continue",
-    event: "PreToolUse",
+    event: eventName,
     decision: "continue",
     persistence: false,
     iterations,
@@ -121,8 +165,17 @@ async function main() {
       p95: round(percentile(durations, 0.95)),
       max: round(Math.max(...durations)),
     },
+    diagnostic_node_process_floor_ms:
+      floorDurations.length > 0
+        ? {
+            iterations: floorDurations.length,
+            p50: round(percentile(floorDurations, 0.5)),
+            p95: round(percentile(floorDurations, 0.95)),
+            max: round(Math.max(...floorDurations)),
+          }
+        : null,
     claim_boundary:
-      "One local machine and source checkout; not a cross-device service-level objective.",
+      "One local machine and source checkout; not a cross-device service-level objective. The optional empty-Node process floor is diagnostic only and must not be subtracted to claim Guard latency or target compliance.",
   };
   const serialized = JSON.stringify(report, null, 2) + "\n";
   if (options.output) {

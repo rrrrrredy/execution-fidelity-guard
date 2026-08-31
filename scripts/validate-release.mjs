@@ -70,8 +70,10 @@ async function validate() {
     "docs/integration-contract.md",
     "evals/replay-manifest.json",
     "evals/replay-coverage.json",
-    "evals/hook-latency-windows-2026-08-31.json",
+    "evals/shadow-pilot-summary.schema.json",
+    "evals/hook-latency-windows-2026-08-31-v0.2.1.json",
     "scripts/benchmark-hook.mjs",
+    "scripts/summarize-shadow-pilot.mjs",
     "scripts/assert-source-simulation.mjs",
     "scripts/verify-packed-artifact.mjs",
     "scripts/verify-packed-execution.mjs",
@@ -95,7 +97,12 @@ async function validate() {
   const hooks = await readJson("plugins/execution-fidelity-guard/hooks/hooks.json");
   const replay = await readJson("evals/replay-manifest.json");
   const coverage = await readJson("evals/replay-coverage.json");
-  const latency = await readJson("evals/hook-latency-windows-2026-08-31.json");
+  const shadowPilotSchema = await readJson(
+    "evals/shadow-pilot-summary.schema.json",
+  );
+  const latency = await readJson(
+    "evals/hook-latency-windows-2026-08-31-v0.2.1.json",
+  );
   const normalizedEventSchema = await readJson(
     "plugins/execution-fidelity-guard/spec/normalized-event.schema.json",
   );
@@ -116,6 +123,7 @@ async function validate() {
       hooks,
       replay,
       coverage,
+      shadowPilotSchema,
       latency,
       normalizedEventSchema,
       evidenceReferenceSchema,
@@ -146,6 +154,11 @@ async function validate() {
       "node scripts/verify-packed-execution.mjs",
     "real packed execution verifier script is missing",
   );
+  check(
+    packageJson.scripts?.["pilot:summary"] ===
+      "node scripts/summarize-shadow-pilot.mjs",
+    "shadow pilot summarizer script is missing",
+  );
   const packageFiles = new Set(packageJson.files ?? []);
   for (const requiredPackagePath of [
     "PRIVACY.md",
@@ -156,8 +169,9 @@ async function validate() {
     "examples",
     "evals/replay-manifest.json",
     "evals/replay-coverage.json",
+    "evals/shadow-pilot-summary.schema.json",
     "evals/inventory-audit-2026-08-28.md",
-    "evals/hook-latency-windows-2026-08-31.json",
+    "evals/hook-latency-windows-2026-08-31-v0.2.1.json",
     "scripts",
     "test",
     "test-support",
@@ -334,6 +348,17 @@ async function validate() {
       latency.latency_ms.p95 < 3000,
     "Hook latency snapshot is invalid or exceeds the configured timeout",
   );
+  check(
+    Number.isFinite(latency.diagnostic_node_process_floor_ms?.p95) &&
+      latency.claim_boundary?.includes("must not be subtracted"),
+    "Hook latency snapshot omits the process-floor diagnostic boundary",
+  );
+  check(
+    shadowPilotSchema.properties?.kind?.const ===
+      "execution-fidelity-guard-shadow-pilot-summary" &&
+      shadowPilotSchema.properties?.claim_boundary?.minItems >= 4,
+    "shadow pilot schema does not preserve its evidence boundary",
+  );
 
   const pluginFiles = await walk(pluginRoot);
   const textExtensions = new Set([".json", ".md", ".mjs"]);
@@ -379,6 +404,12 @@ async function validate() {
     integration.includes(`${latency.latency_ms.p95} ms p95`),
     "integration contract omits the measured performance gap",
   );
+  const readme = await readText("README.md");
+  check(
+    readme.includes("npm run pilot:summary") &&
+      readme.includes("does not prove they were independently"),
+    "README does not document the shadow pilot command and claim boundary",
+  );
   const workflow = await readText(".github/workflows/ci.yml");
   check(
     workflow.includes("ubuntu-latest") &&
@@ -391,6 +422,15 @@ async function validate() {
       workflow.includes("npm run verify:packed-execution"),
     "CI must assert the block decision and execute the real tarball",
   );
+  check(
+    workflow.includes(
+      "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+    ) &&
+      workflow.includes(
+        "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+      ),
+    "CI actions are not pinned to the reviewed v7 commit SHAs",
+  );
   const privacy = await readText("PRIVACY.md");
   check(
     privacy.includes("EFG_RETENTION_DAYS") &&
@@ -402,7 +442,6 @@ async function validate() {
     security.includes("latest tagged 0.2.x preview"),
     "security support line is stale for the release version",
   );
-  const readme = await readText("README.md");
   check(
     readme.includes("Codex IDE extension does not currently support plugins") &&
       readme.includes("not an exhaustive"),

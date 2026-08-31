@@ -376,7 +376,7 @@ test("SessionStart prunes only session directories older than retention", async 
   assert.equal(await pathExists(sessionStatePath(config, "prune-trigger")), true);
 });
 
-test("SessionEnd deletion removes only the exact session when opted in", async (t) => {
+test("SessionEnd deletion removes only the exact session even with persistence off", async (t) => {
   const stateRoot = await temporaryState(t);
   const config = makeConfig(stateRoot, { deleteOnSessionEnd: true });
   await writeRecord(config, "ending-session", "events", { event_id: "evt_end" });
@@ -389,7 +389,7 @@ test("SessionEnd deletion removes only the exact session when opted in", async (
       hook_event_name: "SessionEnd",
       reason: "other",
     },
-    { binding: makeBinding(), config },
+    { binding: makeBinding(), config: { ...config, persist: false } },
   );
 
   assert.equal(await pathExists(sessionStatePath(config, "ending-session")), false);

@@ -30,6 +30,6 @@ artifact attestation are incompatible with strict 1.0 consumers. Consumers
 must select a schema by each record's `schema_version`, not the npm package
 version.
 
-The Continuity schema is an interchange boundary only in 0.2.0; the runtime
+The Continuity schema is an interchange boundary only in 0.2.x; the runtime
 does not load it. See the repository integration contract for state ownership
 and unverified capabilities.

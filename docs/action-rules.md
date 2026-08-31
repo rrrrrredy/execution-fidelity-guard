@@ -59,9 +59,9 @@ Searches such as `rg "pip install"` and normal commands such as `node --test` do
 
 The parser splits unquoted shell segments and inspects the leading executable. It is not a complete PowerShell, cmd.exe, or POSIX shell interpreter. Commands hidden behind arbitrary scripts, aliases, eval, encoded payloads, or unsupported wrappers may not be recognized.
 
-Version 0.2.0 injects objective, primary-object, delivery-surface, scope, and
+Version 0.2.1 injects objective, primary-object, delivery-surface, scope, and
 must fields as bounded Agent context, but it does not derive path-aware gates
-from them. Cost is not a TaskContractLite field in 0.2.0. Hard decisions use
+from them. Cost is not a TaskContractLite field in 0.2.1. Hard decisions use
 the structured rule forms above.
 
 ## Natural-language constraints
