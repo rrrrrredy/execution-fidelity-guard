@@ -12,7 +12,7 @@ body:
     id: version
     attributes:
       label: Version
-      placeholder: v0.1.0
+      placeholder: v0.2.0
     validations:
       required: true
   - type: dropdown
@@ -49,6 +49,6 @@ body:
     id: platform
     attributes:
       label: Platform
-      placeholder: Codex desktop on Windows, Codex CLI on macOS, or Codex IDE
+      placeholder: Codex desktop on Windows or Codex CLI on macOS/Linux; IDE plugins are unsupported
     validations:
       required: true

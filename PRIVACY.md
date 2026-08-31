@@ -6,6 +6,7 @@ Execution Fidelity Guard is local-first and has no runtime telemetry or network 
 
 When persistence is enabled, the plugin stores per-session JSON records containing:
 
+- one-way SHA-256 session, turn, and tool-use references instead of the raw Host identifiers;
 - contract reference and version;
 - event type, time, and content hashes;
 - normalized action labels;
@@ -23,9 +24,12 @@ The runtime does not intentionally persist:
 - tool response bodies;
 - transcript content;
 - hidden reasoning;
-- passwords, tokens, API keys, or credentials.
+- passwords, tokens, API keys, or credentials;
+- raw Host session, turn, or tool-use identifiers.
 
 Content is hashed before persistence. Model-visible contract context is length-limited and applies token and credential redaction.
+Receipt display and export also rewrite legacy raw `session_id`, `turn_id`, and
+`tool_use_id` fields to pseudonymous references.
 
 ## Controls
 
@@ -34,6 +38,7 @@ Content is hashed before persistence. Model-visible contract context is length-l
 - Set `EFG_RETENTION_DAYS` to a value from 1 through 3650.
 - Set `EFG_DELETE_ON_SESSION_END=true` to delete only the ending session's Guard-owned state after SessionEnd is recorded.
 - Use `receipts show` or `receipts export` to inspect one session. Export refuses to overwrite an existing file.
+- Use `receipts summary` or `status` for a compact completion view.
 - Use `receipts delete --session SESSION --yes` for an explicit, exact-session deletion.
 - Remove the plugin through Codex to stop future Hook execution.
 - Delete only the dedicated Execution Fidelity Guard state directory when you intentionally want to erase retained receipts.
@@ -42,6 +47,12 @@ Disabling this plugin does not change Codex's sandbox, approval policy, or other
 
 ## Limitations
 
-No redaction system can prove arbitrary user-provided text is secret-free. Put identifiers rather than sensitive values in task contracts and evidence labels. A local user or process with access to the state directory can read its metadata.
+No redaction system can prove arbitrary user-provided text is secret-free. Put
+identifiers rather than sensitive values in task contracts, evidence labels,
+and artifact filenames. A local user or process with access to the state
+directory can read its metadata. Identifier and content hashes are unsalted
+fingerprints, not encryption or anonymity guarantees. Anyone who knows or can
+guess a low-entropy candidate identifier, prompt, command, or result can
+compute and compare its hash.
 
 For security reports, follow [SECURITY.md](SECURITY.md).

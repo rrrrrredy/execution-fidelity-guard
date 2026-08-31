@@ -14,6 +14,19 @@
         ]
       }
     ],
+    "SubagentStart": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/src/hook.mjs\"",
+            "timeout": 3,
+            "additionalContextLimit": 1200
+          }
+        ]
+      }
+    ],
     "UserPromptSubmit": [
       {
         "hooks": [
@@ -79,6 +92,18 @@
     "PostCompact": [
       {
         "matcher": "manual|auto",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/src/hook.mjs\"",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": ".*",
         "hooks": [
           {
             "type": "command",

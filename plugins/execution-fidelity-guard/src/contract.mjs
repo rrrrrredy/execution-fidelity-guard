@@ -19,6 +19,20 @@ const INIT_PLACEHOLDERS = new Set([
   "Replace with non-negotiable requirements.",
 ]);
 
+const SUPPORTED_ACTION_RULES = new Set([
+  "read",
+  "write",
+  "write_workspace",
+  "delete",
+  "destructive",
+  "install_local",
+  "network",
+  "publish",
+  "external",
+  "external_side_effect",
+  "unknown",
+]);
+
 function isRecord(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -46,7 +60,7 @@ function exactKeys(value, allowed, label, errors) {
   }
 }
 
-function stringArray(value, label, errors, { min = 0 } = {}) {
+function stringArray(value, label, errors, { min = 0, unique = false } = {}) {
   if (!Array.isArray(value) || value.length < min) {
     errors.push(label + " must be an array with at least " + min + " item(s)");
     return;
@@ -54,6 +68,56 @@ function stringArray(value, label, errors, { min = 0 } = {}) {
   if (value.some((entry) => typeof entry !== "string" || !entry.trim())) {
     errors.push(label + " must contain only non-empty strings");
   }
+  if (unique && new Set(value).size !== value.length) {
+    errors.push(label + " must contain unique items");
+  }
+}
+
+function structuredRuleError(value) {
+  const raw = String(value ?? "").trim();
+  const match = raw.match(/^(action|tool|command-prefix):(.*)$/i);
+  if (!match) {
+    return /^(?:actions?|tools?|command(?:-|_| )?prefix)\s*:/i.test(raw)
+      ? "unsupported structured rule syntax: " + raw
+      : null;
+  }
+  const kind = match[1].toLowerCase();
+  const ruleValue = match[2].trim().toLowerCase();
+  if (!ruleValue) return kind + " rule must have a value";
+  if (kind === "action" && !SUPPORTED_ACTION_RULES.has(ruleValue)) {
+    return "unsupported action rule tag: " + ruleValue;
+  }
+  return null;
+}
+
+function isRfc3339DateTime(value) {
+  if (typeof value !== "string") return false;
+  const match = value.match(
+    /^(\d{4})-(\d{2})-(\d{2})[Tt](\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:[Zz]|([+-])(\d{2}):(\d{2}))$/,
+  );
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const second = Number(match[6]);
+  const offsetHour = match[8] === undefined ? 0 : Number(match[8]);
+  const offsetMinute = match[9] === undefined ? 0 : Number(match[9]);
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return (
+    month >= 1 &&
+    month <= 12 &&
+    day >= 1 &&
+    day <= days[month - 1] &&
+    hour <= 23 &&
+    minute <= 59 &&
+    second <= 59 &&
+    offsetHour <= 23 &&
+    offsetMinute <= 59 &&
+    !Number.isNaN(Date.parse(value))
+  );
 }
 
 export function validateTaskContractLite(value) {
@@ -68,7 +132,10 @@ export function validateTaskContractLite(value) {
       errors.push(key + " must be a non-empty string");
     }
   }
-  stringArray(value.delivery_surface, "delivery_surface", errors, { min: 1 });
+  stringArray(value.delivery_surface, "delivery_surface", errors, {
+    min: 1,
+    unique: true,
+  });
   exactKeys(value.scope, ["include", "exclude"], "scope", errors);
   if (isRecord(value.scope)) {
     stringArray(value.scope.include, "scope.include", errors);
@@ -87,6 +154,12 @@ export function validateTaskContractLite(value) {
       "must_and_must_not.must_not",
       errors,
     );
+    if (Array.isArray(value.must_and_must_not.must_not)) {
+      for (const rule of value.must_and_must_not.must_not) {
+        const error = structuredRuleError(rule);
+        if (error) errors.push("must_and_must_not.must_not " + error);
+      }
+    }
   }
   exactKeys(
     value.authorization,
@@ -97,6 +170,12 @@ export function validateTaskContractLite(value) {
   if (isRecord(value.authorization)) {
     for (const key of ["allowed", "requires_user", "forbidden"]) {
       stringArray(value.authorization[key], "authorization." + key, errors);
+      if (Array.isArray(value.authorization[key])) {
+        for (const rule of value.authorization[key]) {
+          const error = structuredRuleError(rule);
+          if (error) errors.push("authorization." + key + " " + error);
+        }
+      }
     }
   }
   if (!Array.isArray(value.completion_evidence) || value.completion_evidence.length < 1) {
@@ -144,7 +223,7 @@ function validateEnvelope(value) {
     errors.push("source must be user-intent-plugin or task-contract-lite");
   }
   stringArray(value.source_message_refs, "source_message_refs", errors);
-  if (typeof value.updated_at !== "string" || Number.isNaN(Date.parse(value.updated_at))) {
+  if (!isRfc3339DateTime(value.updated_at)) {
     errors.push("updated_at must be an ISO date-time");
   }
   if (
@@ -192,31 +271,14 @@ export function parseContractDocument(raw, metadata = {}) {
         };
   }
   if (isRecord(raw) && "schema_version" in raw && "contract_ref" in raw) {
-    const errors = validateEnvelope(raw);
-    let snapshotHash = null;
-    if (raw.source === "task-contract-lite") {
-      errors.push(...validateTaskContractLite(raw.task_contract_lite));
-      errors.push(...contractReadinessErrors(raw.task_contract_lite));
-      if (isRecord(raw.task_contract_lite)) {
-        snapshotHash = sha256(raw.task_contract_lite);
-      }
-      if (raw.snapshot_sha256 === undefined) {
-        errors.push("task-contract-lite envelope requires snapshot_sha256");
-      } else if (snapshotHash && raw.snapshot_sha256 !== snapshotHash) {
-        errors.push("snapshot_sha256 does not match the canonical task contract");
-      }
-    } else {
-      errors.push("user-intent-plugin envelopes require a separate bounded projection");
-    }
-    return errors.length
-      ? { status: "invalid", errors }
-      : {
-          status: "bound",
-          envelope: raw,
-          contract: raw.task_contract_lite,
-          provider: "task-contract-lite",
-          snapshotHash,
-        };
+    return {
+      status: "invalid",
+      errors: [
+        raw.source === "task-contract-lite"
+          ? "standalone fallback envelopes are not accepted; provide the bare seven-field TaskContractLite so Guard derives its identity"
+          : "user-intent-plugin envelopes require a separate bounded projection",
+      ],
+    };
   }
   const errors = [
     ...validateTaskContractLite(raw),
@@ -293,12 +355,28 @@ export function compactContractContext(binding) {
   ]
     .slice(0, 12)
     .map((item) => redactText(item, 120));
+  const must = contract.must_and_must_not.must
+    .slice(0, 6)
+    .map((item) => redactText(item, 100));
+  const delivery = contract.delivery_surface
+    .slice(0, 4)
+    .map((item) => redactText(item, 80));
+  const scopeInclude = contract.scope.include
+    .slice(0, 4)
+    .map((item) => redactText(item, 80));
+  const scopeExclude = contract.scope.exclude
+    .slice(0, 4)
+    .map((item) => redactText(item, 80));
   const parts = [
     "Execution Fidelity Guard contract " +
       envelope.contract_ref + " v" + envelope.contract_version + " is active.",
     "Objective: " + redactText(contract.objective, 220),
     "Primary object: " + redactText(contract.primary_object, 160),
   ];
+  if (delivery.length) parts.push("Delivery: " + delivery.join(", "));
+  if (scopeInclude.length) parts.push("In scope: " + scopeInclude.join(", "));
+  if (scopeExclude.length) parts.push("Out of scope: " + scopeExclude.join(", "));
+  if (must.length) parts.push("Required: " + must.join("; "));
   if (rules.length) parts.push("Active constraints: " + rules.join("; "));
   return parts.join(" ");
 }

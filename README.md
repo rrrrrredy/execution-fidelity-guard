@@ -11,10 +11,10 @@ against contract-bound evidence.
 It targets a specific failure: the Agent remembers the broad goal but quietly
 crosses an explicit action or authorization boundary, or claims completion
 without the required evidence. The objective, object, delivery surface, and
-scope fields remain bounded context in 0.1.0; they are not deterministic,
+scope fields remain bounded context in 0.2.0; they are not deterministic,
 path-aware gates.
 
-Version 0.1.0 is an open-source preview. It is usable today, but it is a guardrail, not a sandbox or complete security boundary.
+Version 0.2.0 is an open-source preview. It is usable today, but it is a guardrail, not a sandbox or complete security boundary.
 
 ## What it does
 
@@ -23,7 +23,8 @@ Version 0.1.0 is an open-source preview. It is usable today, but it is a guardra
 - Blocks only deterministic contract conflicts.
 - Pauses `requires_user` actions until the user answers and the canonical contract owner publishes a revised contract that records the allowance.
 - Records result and decision receipts without retaining prompt, command, or output content.
-- Continues an explicit completion claim when required evidence is missing, with a two-attempt cap under normal sequential Host delivery.
+- Continues an explicit completion claim when required evidence is missing, with an atomic two-attempt cap per session and contract.
+- Reinjects the compact active contract when Codex starts a subagent.
 - Starts in `shadow` mode so teams can measure would-block behavior before enforcement.
 
 ## Decision boundary
@@ -45,19 +46,29 @@ Requirements: Git and Node.js 20 or later. There are no runtime dependencies.
     git clone https://github.com/rrrrrredy/execution-fidelity-guard.git
     cd execution-fidelity-guard
     node plugins/execution-fidelity-guard/bin/efg.mjs doctor
+    node plugins/execution-fidelity-guard/bin/efg.mjs demo
     node plugins/execution-fidelity-guard/bin/efg.mjs check --mode balanced --event examples/events/pre-tool-install.json --contract examples/contracts/no-local-install.json
-    node --test
+    node plugins/execution-fidelity-guard/bin/efg.mjs explain --mode balanced --event examples/events/pre-tool-install.json --contract examples/contracts/no-local-install.json
 
-The simulated install action should return a `PreToolUse` deny decision. `check` is read-only and disables persistence.
+`demo`, `check`, and `explain` run from source and do not install the plugin.
+The demo shows one permitted read and one blocked install. The simulated install
+action should return a `PreToolUse` deny decision. `check` is read-only and disables persistence.
 For a permitted read simulation, `null` means continue. Exit code 0 means
 the simulation ran successfully; inspect the JSON output rather than treating
 the process exit as an allow or deny verdict.
+
+The first `doctor` run can report `contract - unbound`. That is expected
+before you create or point to a contract; use the preset in the next section.
 
 ## Install from the GitHub marketplace
 
 Review the repository and Hook commands before trusting them. Codex requires trust review for non-managed Hooks; see the [official Hooks documentation](https://learn.chatgpt.com/docs/hooks).
 
-    codex plugin marketplace add rrrrrredy/execution-fidelity-guard --ref v0.1.0
+The supported Host surface is Codex CLI and Codex desktop environments where
+plugins are available. The Codex IDE extension does not currently support
+plugins, so this Guard cannot run there.
+
+    codex plugin marketplace add rrrrrredy/execution-fidelity-guard --ref v0.2.0
     codex plugin add execution-fidelity-guard@execution-fidelity-guard
 
 Start a new Codex task after installation so the Skill and Hooks are discovered. These commands modify local Codex plugin state; they are not needed for source evaluation.
@@ -75,6 +86,12 @@ Ask Codex to use `$execution-fidelity`, or create a fallback contract from a sou
 
 This creates `.execution-fidelity/contract.json` without overwriting an existing file. Replace every placeholder before enforcement.
 
+For a ready no-local-install starting point, supply the objective and primary
+object explicitly, then validate the result:
+
+    node plugins/execution-fidelity-guard/bin/efg.mjs init --preset no-local-install --objective "Ship a verified release" --primary-object "my project"
+    node plugins/execution-fidelity-guard/bin/efg.mjs contract validate --json
+
 The fallback has exactly seven fields:
 
 1. `objective`
@@ -86,6 +103,11 @@ The fallback has exactly seven fields:
 7. `completion_evidence`
 
 See [the no-local-install example](examples/contracts/no-local-install.json) and [the action-rule reference](docs/action-rules.md).
+
+`authorization.allowed` records a positive match. It is not an exhaustive
+allowlist: an unlisted action continues unless a matching `forbidden`,
+`must_not`, or `requires_user` rule intervenes. Use explicit structured rules
+for every boundary that must gate execution.
 
 For a provider integration, version semantics, and the final ownership split
 between Intent Loop, Continuity, Guard, and Codex, read the
@@ -111,42 +133,80 @@ Other optional environment variables:
 
 ## Completion evidence
 
-A passing Hook-observed result automatically satisfies a requirement only when the requirement is deterministic:
+A passing Hook-observed result automatically satisfies a requirement only when
+the requirement is deterministic and the Host reports a structured success.
+For `evidence:test`, the shell command must be one direct test command; chained,
+piped, redirected, or merely printed test text cannot satisfy it automatically:
 
 - `evidence:test`
 - `evidence:<kind>:action:<tag>`
 
-Natural-language requirements need an explicit evidence record. Passing non-user evidence requires a SHA-256:
+Natural-language requirements need an explicit evidence record. The safest
+source-only path asks Guard to read a regular file of at most 64 MiB and compute
+the SHA-256 itself:
 
-    node plugins/execution-fidelity-guard/bin/efg.mjs evidence add --contract .execution-fidelity/contract.json --session SESSION --requirement 1 --kind test --status pass --source "test receipt" --sha256 HASH
+    node plugins/execution-fidelity-guard/bin/efg.mjs evidence add --contract .execution-fidelity/contract.json --state-dir .runtime/source-trial --session source-trial-1 --requirement 1 --kind test --status pass --artifact test-results.json
 
-Manual evidence is explicitly marked `caller_attested`. The digest should be
-the SHA-256 of the exact evidence artifact bytes, for example:
+Replace test-results.json with a real result from the current task.
+The value 1 selects the first item in the contract's completion_evidence list;
+its acceptable_sources must include test.
+
+This is marked `artifact_observed`: Guard verified the artifact bytes and
+computed their digest. The caller still chooses the status and requirement, so
+this does not prove that the artifact is truthful or semantically sufficient.
+
+For an external artifact Guard cannot open, supply a label and digest:
+
+    node plugins/execution-fidelity-guard/bin/efg.mjs evidence add --contract .execution-fidelity/contract.json --state-dir .runtime/source-trial --session source-trial-1 --requirement 1 --kind test --status pass --source "external test receipt" --sha256 HASH
+
+That record is marked `caller_attested`. The digest should be the SHA-256 of the
+exact evidence artifact bytes, for example:
 
     (Get-FileHash -Algorithm SHA256 .\test-results.json).Hash.ToLower()
     sha256sum ./test-results.json
 
-Guard records the supplied digest and label but does not open the artifact or
-verify that the caller's claim is true. A fluent completion sentence therefore
-does not become Hook-observed proof, but a caller can still submit a false
-attestation.
+Guard never turns a fluent completion sentence into observed proof. Both
+evidence paths can still carry a false status or an artifact that does not
+actually satisfy the requirement.
+
+For each requirement, the newest applicable full evidence wins. A newer failed
+or contradictory run invalidates an older pass until a still-newer full pass is
+recorded.
 
 Cross-event completion checks require persistence. If `EFG_PERSIST=false`,
-action checks still work, but a later Stop event cannot recover earlier evidence.
+action checks still work, but `evidence add` is rejected and a later Stop event
+cannot recover earlier evidence.
+
+`--session` is a lookup key. For a source-only trial, choose one label such
+as `source-trial-1` and reuse it exactly in every command. In an installed
+workflow, SessionStart and SubagentStart give the Agent a pseudonymous
+`session:<sha256>` reference; the CLI accepts that value without exposing the
+raw Host identifier. Manual evidence is an advanced Agent or automation path.
+If the key does not match retained state, `status` and
+`receipts summary` report `session_not_found` and a next action.
 
 Inspect, export, or explicitly delete one session's Guard-owned state from a
 source checkout:
 
-    node plugins/execution-fidelity-guard/bin/efg.mjs receipts show --session SESSION
-    node plugins/execution-fidelity-guard/bin/efg.mjs receipts export --session SESSION --output guard-receipts.json
-    node plugins/execution-fidelity-guard/bin/efg.mjs receipts delete --session SESSION --yes
+Source-only demo, check, and explain decisions are intentionally not persisted.
+The trial summary below therefore contains only evidence or receipts created by
+persistence-enabled commands, such as evidence add.
+
+    node plugins/execution-fidelity-guard/bin/efg.mjs receipts show --state-dir .runtime/source-trial --session source-trial-1
+    node plugins/execution-fidelity-guard/bin/efg.mjs receipts summary --state-dir .runtime/source-trial --session source-trial-1 --contract .execution-fidelity/contract.json
+    node plugins/execution-fidelity-guard/bin/efg.mjs status --state-dir .runtime/source-trial --session source-trial-1 --contract .execution-fidelity/contract.json
+    node plugins/execution-fidelity-guard/bin/efg.mjs receipts export --state-dir .runtime/source-trial --session source-trial-1 --output guard-receipts.json
+    node plugins/execution-fidelity-guard/bin/efg.mjs receipts delete --state-dir .runtime/source-trial --session source-trial-1 --yes
 
 Export refuses to overwrite an existing file. Delete requires `--yes` and
 targets only the normalized session directory under the dedicated state root.
 
 ## Privacy
 
-The runtime makes no network calls. It stores contract references, action labels, hashes, evidence references, and decision receipts under `$CODEX_HOME/plugin-data/execution-fidelity-guard/v1` by default.
+The runtime makes no network calls. It stores pseudonymous SHA-256 session,
+turn, and tool-use references, contract references, action labels, content
+hashes, evidence references, and decision receipts under
+`$CODEX_HOME/plugin-data/execution-fidelity-guard/v1` by default.
 
 It does not intentionally retain prompts, full commands, tool outputs, transcript contents, hidden reasoning, credentials, or secrets. See [PRIVACY.md](PRIVACY.md).
 
@@ -155,16 +215,18 @@ It does not intentionally retain prompts, full commands, tool outputs, transcrip
 - Hosted tools such as WebSearch do not traverse the local Hook path.
 - A later `write_stdin` call does not trigger a second `PreToolUse` decision.
 - Specialized tools can opt out of Hooks.
+- The Codex IDE extension does not currently support plugins.
 - Shell classification is intentionally conservative and cannot prove arbitrary script behavior.
 - Shell wrappers are inspected only for common direct forms; generated scripts and indirect process launch remain outside the deterministic boundary.
-- The seven-field contract carries objective, object, delivery, and scope context, but 0.1.0 hard decisions use only explicit `action:`, `tool:`, and `command-prefix:` rules.
+- The seven-field contract carries objective, object, delivery, and scope context, but 0.2.0 hard decisions use only explicit `action:`, `tool:`, and `command-prefix:` rules.
+- Cost is not represented in the seven-field 0.2.0 contract and is not gated.
 - Natural-language rules never become hard blocks without an explicit structured rule.
 - `PostToolUse` cannot undo a side effect that already happened.
 - A Stop event is a turn boundary, not authoritative task completion.
 - Disabling persistence disables evidence continuity between Hook events.
-- Manual CLI evidence is caller-attested, not independently verified.
-- Concurrent Stop Hook processes can race the persisted continuation counter; the two-attempt cap is guaranteed only for normal sequential Host delivery.
-- No live Intent Loop adapter or Continuity bridge has been integrated in 0.1.0; the provider document is file-based and the Continuity schema is a reserved boundary.
+- CLI evidence can verify artifact bytes and digest, but the supplied status and
+  semantic sufficiency remain attestations.
+- No live Intent Loop adapter or Continuity bridge has been integrated in 0.2.0; the provider document is file-based and the Continuity schema is a reserved boundary.
 - The provider hash validates the current projection but cannot prove global version monotonicity across erased state.
 
 Read [docs/limitations.md](docs/limitations.md) before using `balanced` mode.
@@ -184,20 +246,33 @@ efficacy, false-positive rates, and outcome improvement still require isolated
 re-execution and shadow or controlled online comparison. Do not enable
 `balanced` broadly based on the inventory alone.
 
-The full command-Hook process continue path measured p50 124.47 ms and p95
-140.41 ms on one Windows x64 / Node 20.19.1 source checkout with persistence
+The full command-Hook process continue path measured p50 146.54 ms and p95
+172.02 ms on one Windows x64 / Node 20.19.1 source checkout with persistence
 disabled. That misses the PRD's provisional 100 ms p95 hypothesis, although it
 remains well inside the configured three-second Hook timeout. See
-[the raw benchmark snapshot](evals/hook-latency-windows-2026-08-28.json) and
+[the raw benchmark snapshot](evals/hook-latency-windows-2026-08-31.json) and
 measure on your own host before broad rollout.
 
 ## Development
+
+These commands are supported from a source checkout and are also included in
+the packaged source artifact:
 
     node --test
     node scripts/sync-package-assets.mjs --check
     node scripts/audit-replay-coverage.mjs --check
     node scripts/validate-release.mjs
+    node scripts/assert-source-simulation.mjs
+    node scripts/verify-packed-artifact.mjs
+    npm run verify:packed-execution
     node scripts/benchmark-hook.mjs
+
+`node --test` writes temporary test state under ignored `.runtime/tests` and
+the suite removes its per-case directories after each run.
+
+The packed-execution verifier creates a temporary npm tarball, extracts it,
+runs its own release validator and prohibited-install decision assertion, then
+removes the temporary files. It does not install the package.
 
 Maintainers also run the current Codex plugin and Skill validators before a
 release. Those validators are bundled with Codex development environments and

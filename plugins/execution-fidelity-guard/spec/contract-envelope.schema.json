@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "ContractEnvelope",
-  "description": "Versioned identity and provenance for an active task contract.",
+  "description": "Versioned identity and provenance for an active task contract. Standalone fallback envelopes are internal output and are not accepted as caller input.",
   "type": "object",
   "additionalProperties": false,
   "required": [

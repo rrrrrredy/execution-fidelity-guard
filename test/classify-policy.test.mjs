@@ -30,10 +30,19 @@ test("classifies explicit and implicit local package installation commands", () 
     "npm --prefix . install lodash",
     "pip --disable-pip-version-check install pytest",
     "apt-get -y install jq",
+    "pnpm --dir app add lodash",
+    "yarn --cwd app add lodash",
+    "uv --project app sync",
+    "poetry --directory app install",
+    "python3.11 -m pip install pytest",
+    "sudo -u root apt install jq",
+    "env -u CI npm install lodash",
+    "env -C app npm install lodash",
   ];
   for (const command of commands) {
     const action = classifyToolAction(preToolInput(command));
     assert.ok(action.tags.includes("install_local"), command);
+    assert.equal(action.reversible, false, command);
   }
 });
 
@@ -70,6 +79,14 @@ test("classifies common direct mutation forms before structured policy", () => {
     ["sed -i s/a/b/ file", "write_workspace", "action:write"],
     ["git branch --delete temp", "destructive", "action:destructive"],
     ["gh pr merge 1", "external_side_effect", "action:external"],
+    ["cp source.txt target.txt", "write_workspace", "action:write"],
+    ["mv old.txt new.txt", "write_workspace", "action:write"],
+    ["tee output.txt", "write_workspace", "action:write"],
+    ["git apply change.patch", "write_workspace", "action:write"],
+    ["git cherry-pick abc123", "write_workspace", "action:write"],
+    ["git stash", "write_workspace", "action:write"],
+    ["git switch feature", "write_workspace", "action:write"],
+    ["git worktree add ../trial feature", "write_workspace", "action:write"],
   ];
   for (const [command, tag, rule] of cases) {
     const action = classifyToolAction(preToolInput(command));
@@ -131,11 +148,46 @@ test("similar read-only or non-install forms remain outside mutation tags", () =
     ["gh run view 123", "external_side_effect"],
     ["npm --workspace=pkg run test", "publish"],
     ["npm view pkg version", "publish"],
+    ["git stash list", "write_workspace"],
+    ["git stash show", "write_workspace"],
+    ["git worktree list", "write_workspace"],
   ];
   for (const [command, tag] of cases) {
     const action = classifyToolAction(preToolInput(command));
     assert.equal(action.tags.includes(tag), false, command);
   }
+});
+
+test("named external mutations do not fall through as reads", () => {
+  for (const toolName of [
+    "mcp__codex_app__move_thread_to_sidebar_section",
+    "mcp__github__add_issue_comment",
+    "mcp__github__merge_pull_request",
+    "mcp__codex_app__automation_update",
+    "mcp__codex_app__reorder_section",
+  ]) {
+    const action = classifyToolAction({ tool_name: toolName, tool_input: {} });
+    assert.ok(action.tags.includes("external_side_effect"), toolName);
+    assert.equal(action.tags.includes("read"), false, toolName);
+  }
+  for (const command of ["gh pr comment 7 --body ok", "gh issue comment 8 --body ok"]) {
+    const action = classifyToolAction(preToolInput(command));
+    assert.ok(action.tags.includes("external_side_effect"), command);
+  }
+});
+
+test("unknown named tools stay unknown instead of matching read inside another word", () => {
+  const action = classifyToolAction({
+    tool_name: "mcp__example__thread_compactor",
+    tool_input: {},
+  });
+  assert.deepEqual(action.tags, ["unknown"]);
+});
+
+test("workspace writes are not claimed to be reversible", () => {
+  const action = classifyToolAction(preToolInput("Set-Content note.txt value"));
+  assert.ok(action.tags.includes("write_workspace"));
+  assert.equal(action.reversible, false);
 });
 
 test("deterministic forbidden action blocks", () => {
@@ -186,6 +238,19 @@ test("natural language constraints are reminders, not hard blocks", () => {
   const result = decidePreTool({ binding, action, mode: "balanced" });
   assert.equal(result.decision, "remind");
   assert.equal(result.authority, "semantic_candidate");
+});
+
+test("structured allowance does not suppress a natural-language safety reminder", () => {
+  const binding = makeBinding(
+    makeContract({
+      allowed: ["action:external"],
+      forbidden: ["Do not publish releases"],
+    }),
+  );
+  const action = classifyToolAction(preToolInput("git push origin main"));
+  const result = decidePreTool({ binding, action, mode: "balanced" });
+  assert.equal(result.decision, "remind");
+  assert.ok(result.reasonCodes.includes("semantic_constraint_candidate"));
 });
 
 test("shadow mode records a would-block reminder", () => {

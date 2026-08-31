@@ -17,6 +17,7 @@ jobs:
         os:
           - ubuntu-latest
           - windows-latest
+          - macos-latest
         node:
           - 20
           - 22
@@ -44,7 +45,10 @@ jobs:
         run: node plugins/execution-fidelity-guard/bin/efg.mjs doctor --json
 
       - name: Source-only prohibited-install simulation
-        run: node plugins/execution-fidelity-guard/bin/efg.mjs check --mode balanced --event examples/events/pre-tool-install.json --contract examples/contracts/no-local-install.json
+        run: node scripts/assert-source-simulation.mjs
 
-      - name: Package contents dry run
-        run: npm pack --dry-run --ignore-scripts
+      - name: Packaged artifact is self-consistent
+        run: npm run verify:package-surface
+
+      - name: Real tarball executes its release gates
+        run: npm run verify:packed-execution

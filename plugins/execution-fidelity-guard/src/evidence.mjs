@@ -8,34 +8,29 @@ export function evidenceRequirementRef(index, requirement) {
 function inferStatus(response) {
   if (response && typeof response === "object") {
     if (response.isError === true || response.success === false) return "fail";
-    for (const key of ["exit_code", "exitCode", "statusCode"]) {
+    for (const key of ["exit_code", "exitCode"]) {
       if (Number.isInteger(response[key])) return response[key] === 0 ? "pass" : "fail";
+    }
+    if (Number.isInteger(response.statusCode)) {
+      if (response.statusCode >= 200 && response.statusCode < 400) return "pass";
+      if (response.statusCode >= 400 && response.statusCode < 600) return "fail";
+      return "unknown";
     }
     if (response.success === true) return "pass";
   }
-  const text =
-    typeof response === "string"
-      ? response
-      : response && typeof response === "object"
-        ? String(response.output ?? response.text ?? "")
-        : "";
-  if (/\b(exit(?:ed)? (?:code|status)|exit_code)\s*[:=]?\s*[1-9]\d*\b/i.test(text)) {
-    return "fail";
-  }
-  if (/\b(exit(?:ed)? (?:code|status)|exit_code)\s*[:=]?\s*0\b/i.test(text)) {
-    return "pass";
-  }
   return "unknown";
+}
+
+function isDirectTestCommand(command) {
+  return /^\s*(?:node\s+--test|npm\s+(?:run\s+)?test|pnpm\s+(?:run\s+)?test|yarn\s+(?:run\s+)?test|pytest|cargo\s+test|go\s+test|dotnet\s+test)(?:\s+[^;&|<>`$(){}\r\n]*)?\s*$/i.test(
+    command,
+  );
 }
 
 function inferKind(input, action) {
   const command = action.command.toLowerCase();
   const toolName = action.toolName.toLowerCase();
-  if (
-    /(^|[;&|]\s*|\s)(node\s+--test|npm\s+(?:run\s+)?test|pnpm\s+(?:run\s+)?test|yarn\s+test|pytest|cargo\s+test|go\s+test|dotnet\s+test)(\s|$)/i.test(command)
-  ) {
-    return "test";
-  }
+  if (isDirectTestCommand(command)) return "test";
   if (/^\s*gh\s+release\s+(?:create|view)\b/i.test(command)) return "release";
   if (toolName === "bash") return "command";
   if (toolName === "apply_patch" || action.tags.includes("write_workspace")) return "file";
@@ -46,7 +41,7 @@ function inferKind(input, action) {
 }
 
 function matchedRequirementRefs(binding, evidence, action) {
-  if (binding.status !== "bound" || evidence.status !== "pass") return [];
+  if (binding.status !== "bound") return [];
   const refs = [];
   for (const [index, item] of binding.contract.completion_evidence.entries()) {
     const match = item.requirement
@@ -79,9 +74,11 @@ export function deriveEvidence(input, event, binding, action, now = new Date()) 
     attestation: "hook_observed",
   };
   const requirementRefs = matchedRequirementRefs(binding, evidence, action);
-  if (requirementRefs.length) evidence.coverage = "full_requirement";
+  if (requirementRefs.length && status !== "unknown") {
+    evidence.coverage = "full_requirement";
+  }
   return {
-    schema_version: "1.0",
+    schema_version: "2.0",
     evidence_ref: evidence.evidence_ref,
     contract_ref:
       binding.status === "bound" ? binding.envelope.contract_ref : "unbound",
@@ -96,17 +93,31 @@ export function assessCompletionEvidence(binding, records) {
   if (binding.status !== "bound") {
     return { complete: false, missing: [], reason: "contract_unbound" };
   }
-  const satisfied = new Set();
-  for (const record of records) {
+  const latest = new Map();
+  for (const [recordIndex, record] of records.entries()) {
     if (
       record.contract_ref !== binding.envelope.contract_ref ||
-      record.contract_version !== binding.envelope.contract_version ||
-      record.evidence?.status !== "pass" ||
-      record.evidence?.coverage !== "full_requirement"
+      record.contract_version !== binding.envelope.contract_version
     ) {
       continue;
     }
-    for (const ref of record.requirement_refs ?? []) satisfied.add(ref);
+    const capturedAt = Date.parse(record.evidence?.captured_at ?? "");
+    const timestamp = Number.isFinite(capturedAt) ? capturedAt : Number.NEGATIVE_INFINITY;
+    for (const ref of record.requirement_refs ?? []) {
+      const prior = latest.get(ref);
+      if (
+        !prior ||
+        timestamp > prior.timestamp ||
+        (timestamp === prior.timestamp && recordIndex > prior.recordIndex)
+      ) {
+        latest.set(ref, {
+          status: record.evidence?.status,
+          coverage: record.evidence?.coverage,
+          timestamp,
+          recordIndex,
+        });
+      }
+    }
   }
   const missing = binding.contract.completion_evidence
     .map((item, index) => ({
@@ -114,6 +125,12 @@ export function assessCompletionEvidence(binding, records) {
       ref: evidenceRequirementRef(index, item.requirement),
       requirement: item.requirement,
     }))
-    .filter((item) => !satisfied.has(item.ref));
+    .filter((item) => {
+      const evidence = latest.get(item.ref);
+      return (
+        evidence?.status !== "pass" ||
+        evidence?.coverage !== "full_requirement"
+      );
+    });
   return { complete: missing.length === 0, missing, reason: "evaluated" };
 }

@@ -1,6 +1,6 @@
 {
   "name": "execution-fidelity-guard",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": false,
   "description": "Local-first Codex plugin for deterministic task-contract gates and evidence-aware completion checks.",
   "type": "module",
@@ -28,7 +28,9 @@
     "efg": "./plugins/execution-fidelity-guard/bin/efg.mjs"
   },
   "files": [
+    ".github/workflows/ci.yml",
     ".agents/plugins/marketplace.json",
+    "AGENTS.md",
     "plugins/execution-fidelity-guard",
     "README.md",
     "CHANGELOG.md",
@@ -51,7 +53,10 @@
     "evals/replay-coverage.json",
     "evals/manual-decision.schema.json",
     "evals/inventory-audit-2026-08-28.md",
-    "evals/hook-latency-windows-2026-08-28.json"
+    "evals/hook-latency-windows-2026-08-31.json",
+    "scripts",
+    "test",
+    "test-support"
   ],
   "engines": {
     "node": ">=20"
@@ -67,6 +72,8 @@
     "materialize:manifest": "node scripts/materialize-replay-manifest.mjs",
     "audit:replay": "node scripts/audit-replay-coverage.mjs --check",
     "benchmark:hook": "node scripts/benchmark-hook.mjs",
+    "verify:package-surface": "node scripts/verify-packed-artifact.mjs",
+    "verify:packed-execution": "node scripts/verify-packed-execution.mjs",
     "validate": "node scripts/validate-release.mjs",
     "test": "node --test"
   }

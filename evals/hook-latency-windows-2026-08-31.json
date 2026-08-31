@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0",
+  "measured_at": "2026-08-31T04:49:30.650Z",
+  "path": "command_hook_process_continue",
+  "event": "PreToolUse",
+  "decision": "continue",
+  "persistence": false,
+  "iterations": 50,
+  "warmup": 5,
+  "environment": {
+    "node": "v20.19.1",
+    "platform": "win32",
+    "arch": "x64",
+    "cpu_count": 8
+  },
+  "latency_ms": {
+    "p50": 146.54,
+    "p95": 172.02,
+    "max": 185.15
+  },
+  "claim_boundary": "One local machine and source checkout; not a cross-device service-level objective."
+}

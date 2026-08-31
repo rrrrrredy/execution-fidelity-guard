@@ -1,5 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
-import { makeId, sha256, toEventType } from "./canonical.mjs";
+import {
+  identifierReference,
+  makeId,
+  sessionReference,
+  sha256,
+  toEventType,
+} from "./canonical.mjs";
 import { classifyToolAction } from "./classify.mjs";
 import { assessStop } from "./completion.mjs";
 import { loadConfig } from "./config.mjs";
@@ -11,19 +17,20 @@ import {
   deleteSession,
   pruneExpiredSessions,
   readRecords,
-  readStopState,
+  transitionStopState,
   writeRecord,
-  writeStopState,
 } from "./store.mjs";
 
 const SUPPORTED_EVENTS = new Set([
   "SessionStart",
+  "SubagentStart",
   "UserPromptSubmit",
   "PreToolUse",
   "PermissionRequest",
   "PostToolUse",
   "PreCompact",
   "PostCompact",
+  "SubagentStop",
   "Stop",
   "SessionEnd",
 ]);
@@ -46,9 +53,12 @@ function eventHashInput(input) {
     case "PostToolUse":
       return input.tool_input ?? null;
     case "Stop":
+    case "SubagentStop":
       return input.last_assistant_message ?? null;
     case "SessionStart":
       return input.source ?? null;
+    case "SubagentStart":
+      return { agent_id: input.agent_id ?? null, agent_type: input.agent_type ?? null };
     case "PreCompact":
     case "PostCompact":
       return input.trigger ?? null;
@@ -66,6 +76,7 @@ function eventFacts(input, binding, action) {
   if (input.source) facts.source = String(input.source);
   if (input.trigger) facts.trigger = String(input.trigger);
   if (input.reason) facts.reason = String(input.reason);
+  if (input.agent_type) facts.agent_type = String(input.agent_type);
   if (action) {
     facts.action_tags = action.tags;
     facts.reversible = action.reversible;
@@ -77,16 +88,20 @@ function normalizedEvent(input, binding, action, now) {
   const identity = contractIdentity(binding);
   const eventType = toEventType(input.hook_event_name);
   return {
-    schema_version: "1.0",
+    schema_version: "2.0",
     event_id: makeId("evt_", [
       input.session_id,
       input.turn_id,
       input.tool_use_id,
       eventType,
     ]),
-    session_id: String(input.session_id || "unknown"),
-    turn_id: input.turn_id == null ? null : String(input.turn_id),
-    tool_use_id: input.tool_use_id == null ? null : String(input.tool_use_id),
+    session_id: sessionReference(input.session_id),
+    turn_id:
+      input.turn_id == null ? null : identifierReference("turn", input.turn_id),
+    tool_use_id:
+      input.tool_use_id == null
+        ? null
+        : identifierReference("tool-use", input.tool_use_id),
     event_type: eventType,
     observed_at: now.toISOString(),
     tool_name: input.tool_name == null ? null : String(input.tool_name),
@@ -188,6 +203,14 @@ function contractPromptContext(binding) {
   );
 }
 
+function contractSessionContext(binding, sessionId) {
+  const prefix =
+    "Guard session reference: " +
+    sessionReference(sessionId) +
+    ". Reuse this pseudonymous value for source CLI status, evidence, and receipt commands. ";
+  return (prefix + compactContractContext(binding)).slice(0, 1200);
+}
+
 async function stopDecision({ input, binding, config, sessionId, now }) {
   const evidenceRecords = await bestEffort(() =>
     readRecords(config, sessionId, "evidence"),
@@ -200,44 +223,75 @@ async function stopDecision({ input, binding, config, sessionId, now }) {
   if (!assessment.shouldVerify || assessment.complete) {
     if (assessment.complete) {
       await bestEffort(() =>
-        writeStopState(config, sessionId, {
-          schema_version: "1.0",
-          contract_ref: binding.envelope.contract_ref,
-          contract_version: binding.envelope.contract_version,
-          attempts: 0,
-          updated_at: now.toISOString(),
-        }),
+        transitionStopState(config, sessionId, () => ({
+          state: {
+            schema_version: "1.0",
+            contract_ref: binding.envelope.contract_ref,
+            contract_version: binding.envelope.contract_version,
+            attempts: 0,
+            updated_at: now.toISOString(),
+          },
+          value: true,
+        })),
       );
     }
     return { decision: continueDecision(), output: {} };
   }
 
-  const prior = await bestEffort(() => readStopState(config, sessionId));
-  const sameContract =
-    prior?.contract_ref === binding.envelope.contract_ref &&
-    prior?.contract_version === binding.envelope.contract_version;
-  const attempts = config.persist
-    ? sameContract
-      ? Number(prior.attempts || 0)
-      : 0
-    : input.stop_hook_active
-      ? config.maxStopContinuations
-      : 0;
   const missingIndexes = assessment.missing
     .slice(0, 8)
     .map((item) => "#" + (item.index + 1))
     .join(", ");
 
-  if (attempts < config.maxStopContinuations) {
-    await bestEffort(() =>
-      writeStopState(config, sessionId, {
-        schema_version: "1.0",
-        contract_ref: binding.envelope.contract_ref,
-        contract_version: binding.envelope.contract_version,
-        attempts: attempts + 1,
-        updated_at: now.toISOString(),
+  let transition;
+  if (config.persist) {
+    transition = await bestEffort(() =>
+      transitionStopState(config, sessionId, (prior) => {
+        const sameContract =
+          prior?.contract_ref === binding.envelope.contract_ref &&
+          prior?.contract_version === binding.envelope.contract_version;
+        const attempts = sameContract ? Number(prior.attempts || 0) : 0;
+        if (attempts >= config.maxStopContinuations) {
+          return { value: { continue: false, attempts } };
+        }
+        return {
+          state: {
+            schema_version: "1.0",
+            contract_ref: binding.envelope.contract_ref,
+            contract_version: binding.envelope.contract_version,
+            attempts: attempts + 1,
+            updated_at: now.toISOString(),
+          },
+          value: { continue: true, attempts },
+        };
       }),
     );
+    if (!transition) {
+      const warning =
+        "Execution Fidelity Guard could not update the completion counter. Completion remains unverified for requirement(s) " +
+        missingIndexes +
+        "; the turn will not be continued automatically.";
+      return {
+        decision: continueDecision({
+          decision: "remind",
+          authority: "external_evidence",
+          severity: "high",
+          reasonCodes: ["completion_claim_unverified", "stop_state_unavailable"],
+          visibility: "user",
+          unlock: warning,
+        }),
+        output: { systemMessage: warning },
+      };
+    }
+  } else {
+    const attempts = input.stop_hook_active ? config.maxStopContinuations : 0;
+    transition = {
+      continue: attempts < config.maxStopContinuations,
+      attempts,
+    };
+  }
+
+  if (transition.continue) {
     const reason =
       "Execution Fidelity Guard found an explicit completion claim but lacks full, passing evidence for requirement(s) " +
       missingIndexes +
@@ -300,7 +354,14 @@ export async function handleHook(input, options = {}) {
     output = {
       hookSpecificOutput: {
         hookEventName: "SessionStart",
-        additionalContext: compactContractContext(binding),
+        additionalContext: contractSessionContext(binding, sessionId),
+      },
+    };
+  } else if (eventName === "SubagentStart") {
+    output = {
+      hookSpecificOutput: {
+        hookEventName: "SubagentStart",
+        additionalContext: contractSessionContext(binding, sessionId),
       },
     };
   } else if (eventName === "UserPromptSubmit") {

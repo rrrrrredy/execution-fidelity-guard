@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Security fixes are applied to the latest tagged 0.1.x release. Older previews may not receive patches.
+Security fixes are applied to the latest tagged 0.2.x preview. Older previews may not receive patches.
 
 ## Report a vulnerability
 

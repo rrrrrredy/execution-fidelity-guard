@@ -79,6 +79,7 @@
       "type": "string",
       "enum": [
         "hook_observed",
+        "artifact_observed",
         "caller_attested"
       ]
     }

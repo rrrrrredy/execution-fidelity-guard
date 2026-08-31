@@ -141,14 +141,6 @@ export function decidePreTool({ binding, action, mode = "balanced" }) {
     });
   }
 
-  const allowed = contract.authorization.allowed.map(parseRule);
-  if (allowed.some((rule) => matchesRule(rule, action))) {
-    return baseDecision({
-      reasonCodes: ["explicit_contract_allowance"],
-      reversible: action.reversible,
-    });
-  }
-
   const hasUnstructuredConstraint = [
     ...contract.authorization.forbidden,
     ...contract.authorization.requires_user,
@@ -166,6 +158,14 @@ export function decidePreTool({ binding, action, mode = "balanced" }) {
       visibility: "model",
       reversible: action.reversible,
       unlock: "Compare the pending action with the natural-language contract constraints.",
+    });
+  }
+
+  const allowed = contract.authorization.allowed.map(parseRule);
+  if (allowed.some((rule) => matchesRule(rule, action))) {
+    return baseDecision({
+      reasonCodes: ["explicit_contract_allowance"],
+      reversible: action.reversible,
     });
   }
 

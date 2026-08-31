@@ -37,6 +37,11 @@ authorization state. After approval, Intent Loop must publish a higher
 TaskContractLite fallback, the user or Agent edits the reviewed fallback so its
 content-derived reference changes. Retrying the unchanged contract asks again.
 An allow rule never auto-approves a native Codex permission request.
+`authorization.allowed` is a positive match list, not a closed allowlist.
+Actions absent from it continue unless a matching `forbidden`, `must_not`, or
+`requires_user` rule applies. A high-risk action still receives a semantic
+reminder when an unstructured constraint is present; an allow match does not
+silence that reminder.
 
 In `shadow` mode, a would-block or would-ask result becomes a reminder.
 
@@ -54,9 +59,10 @@ Searches such as `rg "pip install"` and normal commands such as `node --test` do
 
 The parser splits unquoted shell segments and inspects the leading executable. It is not a complete PowerShell, cmd.exe, or POSIX shell interpreter. Commands hidden behind arbitrary scripts, aliases, eval, encoded payloads, or unsupported wrappers may not be recognized.
 
-Version 0.1.0 does not derive path-aware scope, primary-object, delivery-surface,
-or cost decisions from natural language. Those contract fields are context for
-the Agent and future provider integrations, not deterministic block authority.
+Version 0.2.0 injects objective, primary-object, delivery-surface, scope, and
+must fields as bounded Agent context, but it does not derive path-aware gates
+from them. Cost is not a TaskContractLite field in 0.2.0. Hard decisions use
+the structured rule forms above.
 
 ## Natural-language constraints
 
@@ -67,3 +73,5 @@ A sentence such as "do not install locally" remains a semantic reminder. To enfo
     }
 
 Do not translate ambiguous natural language into a structured rule without confirming the intended authorization boundary.
+`contract validate` rejects a reserved structured prefix with an unsupported
+action tag, such as `action:install-local`; use the documented underscore form.

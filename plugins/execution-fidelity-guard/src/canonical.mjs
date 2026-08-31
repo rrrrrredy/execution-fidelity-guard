@@ -25,6 +25,18 @@ export function sha256(value) {
   return createHash("sha256").update(input).digest("hex");
 }
 
+export function identifierReference(kind, value) {
+  const prefix = String(kind ?? "identifier")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-") || "identifier";
+  return prefix + ":" + sha256(String(value ?? "unknown"));
+}
+
+export function sessionReference(value) {
+  return identifierReference("session", value);
+}
+
 export function makeId(prefix, parts = []) {
   return prefix + sha256([...parts, Date.now(), randomUUID()]).slice(0, 24);
 }

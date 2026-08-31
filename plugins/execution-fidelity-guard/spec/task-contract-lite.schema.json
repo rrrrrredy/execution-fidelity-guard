@@ -81,6 +81,7 @@
     },
     "authorization": {
       "type": "object",
+      "description": "Explicit matches. allowed is not a closed allowlist; unlisted actions continue unless forbidden, must_not, or requires_user matches.",
       "additionalProperties": false,
       "required": [
         "allowed",
@@ -90,6 +91,7 @@
       "properties": {
         "allowed": {
           "type": "array",
+          "description": "Positive structured or natural-language matches, not an exhaustive allowlist.",
           "items": {
             "type": "string",
             "minLength": 1

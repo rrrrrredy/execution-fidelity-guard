@@ -11,24 +11,32 @@ caused by verified Codex behavior.
 3. Use TaskContractLite only when no user-intent plugin contract is available.
 4. Read context continuity only as contract_ref, phase, open commitments, and evidence references.
 5. Use deterministic candidate filtering before any semantic review.
-6. Keep low-cost, read-only, workspace-local, reversible exploration silent.
+6. Keep low-cost, read-only, workspace-local exploration silent.
 7. Permit hard blocking only for deterministic contract or authorization conflicts.
 8. Prefer file, command, test, API, database, real-page, and release evidence over language confidence.
 9. Persist only contract references, normalized facts, evidence references, decisions, and measured outcomes.
 10. Keep semantic hard blocking disabled.
+11. Persist and export pseudonymous session, turn, and tool-use references instead of raw Host identifiers.
+12. Serialize the bounded Stop counter with a per-session local file lock.
+13. Distinguish Hook-observed results, Guard-observed artifact bytes, and caller-attested evidence.
+14. Treat the newest applicable requirement evidence as authoritative and let a
+    failure or contradiction supersede an older pass.
+15. Reject link or junction components in Guard-owned state paths before read,
+    write, prune, or delete operations.
 
 ## Adjust
 
 | Upstream expectation | Current adjustment | Reason |
 |---|---|---|
 | SessionStart and PostCompact restore minimal context | SessionStart handles startup, resume, and compact restoration. PostCompact records compaction only. | PostCompact has no event-specific additionalContext output. |
+| New subagents inherit the task boundary | SubagentStart receives the same compact contract context; SubagentStop records content-free lifecycle coverage. | The Host exposes dedicated lifecycle events, while Guard still does not own the subagent loop. |
 | Ask through a plugin lifecycle hook | Deny the pending action and instruct the Agent to ask one concise user question. Retrying stays denied until the canonical owner publishes a revised contract that records the allowance. | PreToolUse ask is parsed but unsupported; a pure plugin has no native question UI and Guard must not own authorization state. |
 | PermissionRequest assists authorization | Deny only deterministic conflict; otherwise abstain. | The event fires only when native approval is already pending, and auto-approval would weaken user authority. |
 | Manifest points to hooks | Use default hooks/hooks.json discovery and omit the manifest hooks field. | Official runtime supports both; the current local validator rejects the explicit manifest field. |
 | PostToolUse can correct failed execution | It records and feeds back failure but never claims rollback. | Side effects have already occurred. |
-| Stop prevents false completion | It verifies only explicit completion or delivery signals and can continue at most twice. | Stop is a turn boundary, not a goal-completion event. |
+| Stop prevents false completion | It verifies only explicit completion or delivery signals and can continue at most twice per session and contract in one shared local state root. | Stop is a turn boundary, not a goal-completion event, and the counter is not cross-machine state. |
 | Optional MCP in MVP | Start with local files and hook entry points. Add a bundled MCP server only when an actual intent or continuity provider needs a structured runtime bridge. | An empty MCP surface adds operational failure without product value. |
-| Deterministic continue p95 target | Keep the official command-Hook path for v0.1.0 and publish the measured miss instead of adding a persistent MCP process only to hide Node cold start. | The local Windows p95 was 140.41 ms with persistence disabled versus the provisional 100 ms target; a new long-lived server would add lifecycle and tool-surface risk without an installed integration test. |
+| Deterministic continue p95 target | Keep the official command-Hook path for v0.2.0 and publish the measured miss instead of adding a persistent MCP process only to hide Node cold start. | The 2026-08-31 local Windows p95 was 172.02 ms with persistence disabled versus the provisional 100 ms target; a new long-lived server would add lifecycle and tool-surface risk without an installed integration test. |
 
 ## Reject
 

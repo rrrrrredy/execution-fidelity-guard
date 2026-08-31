@@ -72,7 +72,7 @@ test("bare user-intent envelope is rejected because it has no policy projection"
   assert.ok(result.errors.some((error) => error.includes("bounded projection")));
 });
 
-test("explicit fallback envelope requires a matching canonical snapshot hash", () => {
+test("standalone fallback envelopes are rejected so identity stays content-derived", () => {
   const contract = makeContract();
   const envelope = {
     schema_version: "1.0",
@@ -84,16 +84,12 @@ test("explicit fallback envelope requires a matching canonical snapshot hash", (
     task_contract_lite: contract,
     updated_at: "2026-08-28T00:00:00.000Z",
   };
-  const mismatch = parseContractDocument(envelope);
-  assert.equal(mismatch.status, "invalid");
-  assert.ok(mismatch.errors.some((error) => error.includes("canonical task contract")));
-
-  const valid = parseContractDocument({
+  const result = parseContractDocument({
     ...envelope,
     snapshot_sha256: sha256(contract),
   });
-  assert.equal(valid.status, "bound");
-  assert.equal(valid.snapshotHash, sha256(contract));
+  assert.equal(result.status, "invalid");
+  assert.ok(result.errors.some((error) => error.includes("bare seven-field")));
 });
 
 test("generated init placeholders are structurally valid but not ready to bind", () => {
@@ -116,6 +112,45 @@ test("unknown fields fail strict fallback validation", () => {
   const contract = { ...makeContract(), hidden_transcript: "must not exist" };
   const errors = validateTaskContractLite(contract);
   assert.ok(errors.some((error) => error.includes("hidden_transcript")));
+});
+
+test("structured action typos and duplicate delivery surfaces fail validation", () => {
+  const contract = makeContract({ forbidden: ["action:install-local"] });
+  contract.authorization.requires_user = ["actions:publish"];
+  contract.delivery_surface = ["repository", "repository"];
+  const errors = validateTaskContractLite(contract);
+  assert.ok(errors.some((error) => error.includes("unsupported action rule tag")));
+  assert.ok(errors.some((error) => error.includes("unsupported structured rule syntax")));
+  assert.ok(errors.some((error) => error.includes("unique items")));
+});
+
+test("provider updated_at uses strict RFC 3339 calendar validation", () => {
+  const contract = makeContract();
+  const result = parseContractDocument({
+    envelope: {
+      schema_version: "1.0",
+      contract_ref: "intent:bad-date",
+      contract_version: 1,
+      source: "user-intent-plugin",
+      source_message_refs: [],
+      snapshot_sha256: sha256(contract),
+      updated_at: "2026-02-31T00:00:00.000Z",
+    },
+    projection: contract,
+  });
+  assert.equal(result.status, "invalid");
+  assert.ok(result.errors.some((error) => error.includes("ISO date-time")));
+});
+
+test("compact context carries all seven-field intent facets", () => {
+  const contract = makeContract();
+  contract.delivery_surface = ["public repository"];
+  contract.scope = { include: ["plugin"], exclude: ["local install"] };
+  const context = compactContractContext(parseContractDocument(contract));
+  assert.match(context, /Delivery: public repository/);
+  assert.match(context, /In scope: plugin/);
+  assert.match(context, /Out of scope: local install/);
+  assert.match(context, /Required: preserve objective/);
 });
 
 test("contract context redacts credentials before model visibility", () => {

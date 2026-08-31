@@ -14,6 +14,22 @@ const NPM_VALUE_OPTIONS = new Set([
   "-w", "--cache", "--config", "--prefix", "--registry", "--scope",
   "--userconfig", "--workspace",
 ]);
+const PNPM_VALUE_OPTIONS = new Set([...NPM_VALUE_OPTIONS, "-c", "--dir"]);
+const YARN_VALUE_OPTIONS = new Set([...NPM_VALUE_OPTIONS, "--cwd"]);
+const UV_VALUE_OPTIONS = new Set([
+  "--cache-dir", "--config-file", "--directory", "--project", "--python",
+]);
+const POETRY_VALUE_OPTIONS = new Set([
+  "-c", "-p", "--directory", "--project",
+]);
+const SUDO_VALUE_OPTIONS = new Set([
+  "-c", "-g", "-h", "-p", "-r", "-t", "-u",
+  "--chdir", "--command-timeout", "--group", "--host", "--prompt", "--role",
+  "--type", "--user",
+]);
+const ENV_VALUE_OPTIONS = new Set([
+  "-c", "-s", "-u", "--argv0", "--chdir", "--split-string", "--unset",
+]);
 
 function splitSegments(command) {
   const segments = [];
@@ -81,6 +97,34 @@ function executableName(token) {
     .replace(/\.(exe|cmd|bat|ps1)$/i, "");
 }
 
+function discardWrapperOptions(tokens, optionsWithValues, allowAssignments = false) {
+  while (tokens[0]) {
+    const token = String(tokens[0]);
+    if (allowAssignments && /^[A-Za-z_][A-Za-z0-9_]*=/.test(token)) {
+      tokens.shift();
+      continue;
+    }
+    if (token === "--") {
+      tokens.shift();
+      break;
+    }
+    if (!token.startsWith("-") || token === "-") break;
+    const lower = token.toLowerCase();
+    const option = lower.split("=", 1)[0];
+    tokens.shift();
+    const joinedShortValue =
+      option.length === 2 && lower.length > 2 && !lower.includes("=");
+    if (
+      !lower.includes("=") &&
+      !joinedShortValue &&
+      optionsWithValues.has(option) &&
+      tokens[0]
+    ) {
+      tokens.shift();
+    }
+  }
+}
+
 function commandTokens(segment) {
   const tokens = tokenize(segment);
   while (tokens.length) {
@@ -91,18 +135,12 @@ function commandTokens(segment) {
     }
     if (exe === "sudo") {
       tokens.shift();
-      while (tokens[0]?.startsWith("-")) tokens.shift();
+      discardWrapperOptions(tokens, SUDO_VALUE_OPTIONS);
       continue;
     }
     if (exe === "env") {
       tokens.shift();
-      while (
-        tokens[0] &&
-        (tokens[0].startsWith("-") ||
-          /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[0]))
-      ) {
-        tokens.shift();
-      }
+      discardWrapperOptions(tokens, ENV_VALUE_OPTIONS, true);
       continue;
     }
     break;
@@ -180,7 +218,7 @@ function isInstall(tokens) {
   if (/^pip(?:3(?:\.\d+)?)?$/.test(exe) && pipCommand === "install") return true;
   const moduleIndex = args.indexOf("-m");
   if (
-    ["python", "python3", "py"].includes(exe) &&
+    (exe === "py" || /^python(?:3(?:\.\d+)?)?$/.test(exe)) &&
     moduleIndex >= 0 &&
     args[moduleIndex + 1] === "pip" &&
     firstNonOption(args.slice(moduleIndex + 2), pipValueOptions)?.value === "install"
@@ -191,7 +229,7 @@ function isInstall(tokens) {
     args[moduleIndex + 1] === "pip" &&
     firstNonOption(args.slice(moduleIndex + 2), pipValueOptions)?.value === "install"
   ) return true;
-  const uvCommand = firstNonOption(args);
+  const uvCommand = firstNonOption(args, UV_VALUE_OPTIONS);
   if (
     exe === "uv" &&
     ((uvCommand?.value === "pip" &&
@@ -205,7 +243,12 @@ function isInstall(tokens) {
     exe === "npm" &&
     ["install", "i", "ci", "link", "exec", "x", "create"].includes(npmCommand)
   ) return true;
-  const packageManagerCommand = firstNonOption(args, NPM_VALUE_OPTIONS)?.value;
+  const packageManagerCommand =
+    exe === "pnpm"
+      ? firstNonOption(args, PNPM_VALUE_OPTIONS)?.value
+      : exe === "yarn"
+        ? firstNonOption(args, YARN_VALUE_OPTIONS)?.value
+        : firstNonOption(args, NPM_VALUE_OPTIONS)?.value;
   if (
     ["pnpm", "yarn", "bun"].includes(exe) &&
     ["install", "add", "i", "create"].includes(packageManagerCommand)
@@ -216,7 +259,10 @@ function isInstall(tokens) {
       "brew", "apt", "apt-get", "dnf", "yum"].includes(exe) &&
     systemCommand === "install"
   ) return true;
-  if (exe === "poetry" && args[0] === "install") return true;
+  if (
+    exe === "poetry" &&
+    firstNonOption(args, POETRY_VALUE_OPTIONS)?.value === "install"
+  ) return true;
   if (exe === "pipenv" && (!args[0] || args[0] === "install" || args[0] === "sync")) {
     return true;
   }
@@ -315,11 +361,14 @@ function classifySegment(segment, depth = 0) {
   if (
     gh &&
     ((gh.name === "pr" &&
-      ["merge", "close", "reopen", "ready", "review"].includes(ghSubcommand?.name)) ||
+      ["merge", "close", "reopen", "ready", "review", "comment"].includes(
+        ghSubcommand?.name,
+      )) ||
       (gh.name === "issue" &&
-        ["close", "reopen", "pin", "unpin", "lock", "unlock", "transfer"].includes(
-          ghSubcommand?.name,
-        )) ||
+        [
+          "close", "reopen", "pin", "unpin", "lock", "unlock", "transfer",
+          "comment",
+        ].includes(ghSubcommand?.name)) ||
       (gh.name === "release" &&
         ["upload", "delete-asset"].includes(ghSubcommand?.name)) ||
       (gh.name === "repo" &&
@@ -352,7 +401,10 @@ function classifySegment(segment, depth = 0) {
     return tags;
   }
   if (
-    ["add-content", "copy-item", "mkdir", "move-item", "new-item", "set-content", "touch"].includes(exe) ||
+    [
+      "add-content", "copy-item", "cp", "mkdir", "move-item", "mv",
+      "new-item", "set-content", "tee", "touch",
+    ].includes(exe) ||
     (exe === "sed" &&
       args.some((value) => value === "-i" || value.startsWith("-i.") ||
         value === "--in-place" || value.startsWith("--in-place="))) ||
@@ -362,11 +414,17 @@ function classifySegment(segment, depth = 0) {
     return tags;
   }
   if (exe === "git") {
+    const nested = commandView(git.args);
     if (
-      ["status", "diff", "log", "show", "rev-parse", "ls-files", "branch"].includes(git.name)
+      ["status", "diff", "log", "show", "rev-parse", "ls-files", "branch"].includes(git.name) ||
+      (git.name === "stash" && ["list", "show"].includes(nested.name)) ||
+      (git.name === "worktree" && nested.name === "list")
     ) tags.add("read");
     else if (
-      ["add", "commit", "merge", "rebase", "tag", "restore", "checkout"].includes(git.name)
+      [
+        "add", "am", "apply", "checkout", "cherry-pick", "commit", "merge",
+        "rebase", "restore", "revert", "stash", "switch", "tag", "worktree",
+      ].includes(git.name)
     ) tags.add("write_workspace");
     else tags.add("unknown");
     return tags;
@@ -390,6 +448,19 @@ function classifyNamedTool(toolName) {
     : qualified;
   const tags = new Set();
   if (
+    lower === "automation_update" ||
+    lower === "request_plugin_install" ||
+    lower.startsWith("reorder_")
+  ) {
+    tags.add("external_side_effect");
+    if (lower === "request_plugin_install") {
+      tags.add("install_local");
+      tags.add("write_workspace");
+      tags.add("network");
+    }
+    return tags;
+  }
+  if (
     [
       "create_goal",
       "get_goal",
@@ -410,17 +481,17 @@ function classifyNamedTool(toolName) {
     tags.add("write_workspace");
     return tags;
   }
-  if (/(delete|remove|archive|uninstall)/.test(lower)) {
+  if (/^(delete|remove|archive|uninstall)(?:_|$)/.test(lower)) {
     tags.add("delete");
     tags.add("external_side_effect");
     return tags;
   }
-  if (/(create|update|send|publish|push|handoff|share|install|consume|redeem|set)/.test(lower)) {
+  if (
+    /^(create|update|send|publish|push|handoff|share|install|consume|redeem|set|add|post|reply|merge|move|rename|fork|cancel|close|reopen|approve|restore)(?:_|$)/.test(
+      lower,
+    )
+  ) {
     tags.add("external_side_effect");
-    return tags;
-  }
-  if (/(read|get|list|view|search|find|open|status|capture)/.test(lower)) {
-    tags.add("read");
     return tags;
   }
   tags.add("unknown");
@@ -447,7 +518,12 @@ export function classifyToolAction(input) {
     command,
     tags: [...tags].sort(),
     reversible:
-      !tags.has("delete") && !tags.has("destructive") && !tags.has("publish"),
+      !tags.has("delete") &&
+      !tags.has("destructive") &&
+      !tags.has("install_local") &&
+      !tags.has("publish") &&
+      !tags.has("external_side_effect") &&
+      !tags.has("write_workspace"),
     highRisk: [...tags].some((tag) =>
       ["delete", "destructive", "install_local", "publish", "external_side_effect"].includes(tag),
     ),

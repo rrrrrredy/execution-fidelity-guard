@@ -1,6 +1,6 @@
 # Intent, continuity, guard, and host integration contract
 
-Status: frozen for Execution Fidelity Guard 0.1.0.
+Status: frozen for Execution Fidelity Guard 0.2.0.
 
 This contract keeps four products from becoming competing sources of truth.
 It describes the interface implemented by this repository and names the
@@ -62,12 +62,23 @@ unbound and advisory; it does not hard-block.
 If Intent Loop is unavailable, a workspace may provide the same seven-field
 projection as TaskContractLite. Guard derives a content-addressed contract
 reference and assigns fallback version 1. The fallback is not a copy of Intent
-Loop state and must not be treated as provider-owned truth.
+Loop state and must not be treated as provider-owned truth. A caller-supplied
+standalone fallback envelope is rejected so the caller cannot reuse a stale
+`contract_ref` or `contract_version` after changing the projection.
 
 ## Version semantics
 
-- `schema_version` is the wire format version. Runtime 0.1.0 accepts exactly
-  `1.0`; a future incompatible shape requires a new major schema version.
+- Provider documents and bare TaskContractLite inputs use wire schema `1.0`,
+  which runtime 0.2.0 accepts exactly. Continuity snapshots and decision
+  receipts also remain `1.0`.
+- Guard-owned normalized event and evidence-record outputs use wire schema
+  `2.0` in runtime 0.2.0. The major bump covers new subagent event values,
+  pseudonymous Host identifier semantics, and artifact attestation that strict
+  1.0 consumers cannot safely assume they understand.
+- Package version and wire `schema_version` are independent. Consumers select
+  the matching schema for each record. Any future incompatible shape requires
+  another wire major version; compatible additions require a documented minor
+  version.
 - `contract_ref` is the stable identity of one user intent.
 - `contract_version` is a positive integer. Intent Loop increments it for every
   material, user-authorized change to the objective, object, delivery surface,
@@ -76,7 +87,7 @@ Loop state and must not be treated as provider-owned truth.
   the same canonical projection is allowed; changing the projection requires a
   larger version.
 - `snapshot_sha256` proves that the current document and projection agree. Guard
-  0.1.0 does not maintain a global version ledger, so it cannot prove that a
+  0.2.0 does not maintain a global version ledger, so it cannot prove that a
   provider never reused a version with a different, newly hashed projection or
   that versions were globally monotonic across erased state.
 - `updated_at` and `source_message_refs` are provenance. They do not override the
@@ -96,7 +107,8 @@ Guard does not write any state back to Intent Loop or Continuity. It only:
 1. reads the provider document;
 2. writes Guard-owned local events, receipts, evidence, and Stop state when
    persistence is enabled;
-3. emits bounded context or deny responses to the Host; and
+3. emits bounded context, including at SessionStart and SubagentStart, or deny
+   responses to the Host; and
 4. accepts an explicit manual evidence record through its own CLI.
 
 A `requires_user` decision remains denied until the owner changes the
@@ -105,10 +117,15 @@ the approved bounded action in a higher contract version; a reviewed
 TaskContractLite fallback must be edited so its content-derived identity
 changes. Retrying the unchanged contract asks again.
 
+`authorization.allowed` is not a closed allowlist. It records an explicit
+positive match, while an unlisted action continues unless `forbidden`,
+`must_not`, or `requires_user` matches. Guard does not infer default-deny from
+an incomplete allowed list.
+
 The shipped `continuity-snapshot.schema.json` reserves the smallest future
 Continuity interchange: `contract_ref`, `contract_version`, `phase`,
 `open_commitments`, `evidence_refs`, and `captured_at`, plus schema version.
-Guard 0.1.0 does not load that snapshot and no live Continuity bridge is
+Guard 0.2.0 does not load that snapshot and no live Continuity bridge is
 implemented.
 
 ## Not implemented, not verified, or not guaranteed
@@ -116,6 +133,8 @@ implemented.
 - No live Intent Loop adapter has been integrated; only file-based provider
   document loading and validation are implemented.
 - No live Continuity producer or consumer bridge has been implemented.
+- No DeepSeek Harness or other non-Codex Host adapter has been implemented or
+  verified; the 0.2.0 package is Codex-specific.
 - The plugin was not installed into the maintainer's local Codex environment,
   so installed-client discovery and end-to-end Hook delivery remain unverified.
 - Hosted WebSearch, specialized tools that opt out of Hooks, and later
@@ -129,13 +148,22 @@ implemented.
 - Stop is a turn boundary, not authoritative goal completion.
 - The frozen 41-failure and 40-success inventory proves corpus coverage, not
   81-case runtime accuracy, false-positive rate, or outcome improvement.
-- The measured Windows source continue path was 140.41 ms p95 with persistence
+- The measured Windows source continue path was 172.02 ms p95 with persistence
   disabled, missing the provisional 100 ms target. Installed-client, macOS, and
   Linux latency have not been measured.
-- There is no semantic model in 0.1.0, and natural-language rules cannot become
+- There is no semantic model in 0.2.0, and natural-language rules cannot become
   hard blocks by themselves.
-- Objective, primary-object, delivery-surface, scope, and cost fields are not
-  deterministic gate inputs in 0.1.0.
-- Manual CLI evidence is caller-attested rather than independently verified.
-- Concurrent Stop processes can race the two-attempt counter; the cap assumes
-  normal sequential Host delivery.
+- Objective, primary-object, delivery-surface, scope, and must fields are
+  bounded Agent context, not deterministic gate inputs in 0.2.0. Cost is not
+  represented in the 0.2.0 input schema and is not gated.
+- `artifact_observed` evidence proves only which local file bytes Guard
+  read and hashed. The status and semantic sufficiency remain caller claims;
+  label-plus-digest evidence remains fully caller-attested.
+- Overlapping Stop processes share an atomic two-attempt counter only when they
+  use the same local state root and filesystem. The cap is not global across
+  machines, different state roots, or erased state.
+- SubagentStart contract injection and SubagentStop recording are covered by
+  source tests. Installed-client delivery and whether every future subagent
+  implementation traverses these Host events remain unverified.
+- The Codex IDE extension does not currently support plugins, so Guard cannot
+  execute on that Host surface.

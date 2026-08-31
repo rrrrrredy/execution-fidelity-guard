@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import { access, readFile, readdir, utimes } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
+import {
+  identifierReference,
+  sessionReference,
+} from "../plugins/execution-fidelity-guard/src/canonical.mjs";
 import { handleHook } from "../plugins/execution-fidelity-guard/src/runtime.mjs";
 import {
   deleteSession,
@@ -192,6 +196,41 @@ test("Stop continues at most twice when required evidence is missing", async (t)
   assert.match(third.systemMessage, /continuation cap/);
 });
 
+test("concurrent Stop events share one atomic two-attempt cap", async (t) => {
+  const stateRoot = await temporaryState(t);
+  const binding = makeBinding(
+    makeContract({
+      completion: [
+        {
+          requirement: "A human has verified the released UI",
+          acceptable_sources: ["user", "real_page"],
+        },
+      ],
+    }),
+  );
+  const config = makeConfig(stateRoot);
+  const input = {
+    session_id: "concurrent-stop-session",
+    cwd: projectRoot,
+    hook_event_name: "Stop",
+    turn_id: "turn-concurrent",
+    stop_hook_active: false,
+    last_assistant_message: "全部完成并已交付。",
+  };
+  const outputs = await Promise.all(
+    Array.from({ length: 8 }, () => handleHook(input, { binding, config })),
+  );
+  assert.equal(
+    outputs.filter((output) => output?.decision === "block").length,
+    2,
+  );
+  assert.equal(
+    outputs.filter((output) => /continuation cap/.test(output?.systemMessage ?? ""))
+      .length,
+    6,
+  );
+});
+
 test("persisted records contain hashes and labels, not prompt or secret content", async (t) => {
   const stateRoot = await temporaryState(t);
   const secret = ["ghp", "_", "a".repeat(36)].join("");
@@ -218,10 +257,87 @@ test("persisted records contain hashes and labels, not prompt or secret content"
     { binding, config },
   );
   const persisted = await readTree(stateRoot);
+  assert.equal(persisted.includes("privacy-session"), false);
+  assert.match(persisted, new RegExp(sessionReference("privacy-session")));
+  assert.equal(persisted.includes("turn-privacy"), false);
+  assert.equal(persisted.includes("tool-test"), false);
+  assert.match(persisted, new RegExp(identifierReference("turn", "turn-privacy")));
+  assert.match(persisted, new RegExp(identifierReference("tool-use", "tool-test")));
   assert.equal(persisted.includes("violet-capybara"), false);
   assert.equal(persisted.includes(secret), false);
   assert.equal(persisted.includes("pip install"), false);
   assert.match(persisted, /input_sha256/);
+});
+
+test("SessionStart preserves its session reference within the Host context limit", async (t) => {
+  const stateRoot = await temporaryState(t);
+  const contract = makeContract({
+    forbidden: Array.from({ length: 20 }, (_, index) =>
+      "command-prefix:" + "x".repeat(100) + index,
+    ),
+  });
+  contract.objective = "o".repeat(1000);
+  contract.primary_object = "p".repeat(1000);
+  contract.must_and_must_not.must = Array.from(
+    { length: 20 },
+    (_, index) => "must-" + index + "-" + "m".repeat(100),
+  );
+  const output = await handleHook(
+    {
+      session_id: "long-context-session",
+      cwd: projectRoot,
+      hook_event_name: "SessionStart",
+      source: "startup",
+    },
+    { binding: makeBinding(contract), config: makeConfig(stateRoot) },
+  );
+  const context = output.hookSpecificOutput.additionalContext;
+  assert.ok(context.length <= 1200);
+  assert.ok(context.startsWith("Guard session reference: "));
+  assert.match(context, new RegExp(sessionReference("long-context-session")));
+});
+
+test("Subagent lifecycle receives compact contract context without raw agent content", async (t) => {
+  const stateRoot = await temporaryState(t);
+  const binding = makeBinding();
+  const config = makeConfig(stateRoot);
+  const started = await handleHook(
+    {
+      session_id: "subagent-session",
+      cwd: projectRoot,
+      hook_event_name: "SubagentStart",
+      agent_id: "raw-agent-identifier",
+      agent_type: "reviewer",
+    },
+    { binding, config },
+  );
+  assert.equal(
+    started.hookSpecificOutput.hookEventName,
+    "SubagentStart",
+  );
+  assert.match(started.hookSpecificOutput.additionalContext, /contract:test/);
+  assert.match(
+    started.hookSpecificOutput.additionalContext,
+    new RegExp(sessionReference("subagent-session")),
+  );
+
+  const stopped = await handleHook(
+    {
+      session_id: "subagent-session",
+      cwd: projectRoot,
+      hook_event_name: "SubagentStop",
+      agent_id: "raw-agent-identifier",
+      agent_type: "reviewer",
+      last_assistant_message: "private-review-content",
+    },
+    { binding, config },
+  );
+  assert.equal(stopped, null);
+  const persisted = await readTree(stateRoot);
+  assert.equal(persisted.includes("subagent-session"), false);
+  assert.equal(persisted.includes("raw-agent-identifier"), false);
+  assert.equal(persisted.includes("private-review-content"), false);
+  assert.match(persisted, /"agent_type":"reviewer"/);
 });
 
 test("SessionStart prunes only session directories older than retention", async (t) => {

@@ -17,7 +17,7 @@
   ],
   "properties": {
     "schema_version": {
-      "const": "1.0"
+      "const": "2.0"
     },
     "event_id": {
       "type": "string",
@@ -25,30 +25,35 @@
     },
     "session_id": {
       "type": "string",
-      "minLength": 1
+      "pattern": "^session:[a-f0-9]{64}$",
+      "description": "Wire-compatible field name containing a pseudonymous session reference in runtime 0.2.0 and later."
     },
     "turn_id": {
       "type": [
         "string",
         "null"
-      ]
+      ],
+      "pattern": "^turn:[a-f0-9]{64}$"
     },
     "tool_use_id": {
       "type": [
         "string",
         "null"
-      ]
+      ],
+      "pattern": "^tool-use:[a-f0-9]{64}$"
     },
     "event_type": {
       "type": "string",
       "enum": [
         "session_start",
+        "subagent_start",
         "user_prompt_submit",
         "pre_tool_use",
         "permission_request",
         "post_tool_use",
         "pre_compact",
         "post_compact",
+        "subagent_stop",
         "stop",
         "session_end"
       ]
