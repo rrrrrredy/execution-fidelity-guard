@@ -5,10 +5,9 @@ import {
   assessCompletionEvidence,
   deriveEvidence,
 } from "../plugins/execution-fidelity-guard/src/evidence.mjs";
-import { makeBinding, preToolInput } from "../test-support/helpers.mjs";
+import { makeBinding, makeContract, preToolInput } from "../test-support/helpers.mjs";
 
-function observed(command, response, capturedAt, suffix) {
-  const binding = makeBinding();
+function observed(command, response, capturedAt, suffix, binding = makeBinding()) {
   const input = {
     ...preToolInput(command),
     hook_event_name: "PostToolUse",
@@ -51,6 +50,58 @@ test("only a direct test command can automatically satisfy test evidence", () =>
     assert.equal(attempt.record.evidence.kind, "command", command);
     assert.equal(attempt.record.evidence.coverage, "partial_requirement", command);
     assert.equal(assessCompletionEvidence(attempt.binding, [attempt.record]).complete, false);
+  }
+});
+
+test("help, version, list, and collection commands cannot satisfy test evidence", () => {
+  for (const command of [
+    "node --test --help",
+    "pytest --help",
+    "pytest --collect-only",
+    "go test -list .",
+    "cargo test -- --list",
+    "dotnet test --list-tests",
+    "npm test --if-present",
+    "npm run test --if-present",
+    "cargo test --no-run",
+  ]) {
+    const attempt = observed(
+      command,
+      { exit_code: 0 },
+      "2026-08-31T00:01:00.000Z",
+      "inspection-" + command,
+    );
+    assert.equal(attempt.record.evidence.kind, "command", command);
+    assert.equal(assessCompletionEvidence(attempt.binding, [attempt.record]).complete, false);
+  }
+});
+
+test("release-like commands remain command evidence without a bound repository and tag", () => {
+  const binding = makeBinding(
+    makeContract({
+      completion: [
+        { requirement: "evidence:release", acceptable_sources: ["release"] },
+      ],
+    }),
+  );
+  for (const command of [
+    "git push origin main",
+    "gh pr create --title test",
+    "npm publish",
+    "gh release view v0.2.2",
+    "gh --repo cli/cli release view",
+    "gh release view --help",
+  ]) {
+    const attempt = observed(
+      command,
+      { exit_code: 0 },
+      "2026-08-31T00:02:00.000Z",
+      "release-" + command,
+      binding,
+    );
+    assert.equal(attempt.record.evidence.kind, "command", command);
+    assert.equal(attempt.record.requirement_refs.length, 0, command);
+    assert.equal(assessCompletionEvidence(binding, [attempt.record]).complete, false, command);
   }
 });
 

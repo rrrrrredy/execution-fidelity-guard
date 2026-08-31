@@ -34,5 +34,5 @@ evidence when an Agent claims completion.
 - Product efficacy, false-positive rate, and outcome improvement are not yet
   established by controlled real-world use.
 - Live Intent Loop and Continuity adapters are not implemented.
-- DeepSeek Harness is a strong next adapter target, but this package is not
-  currently a DeepSeek Harness plugin.
+- This Codex package does not contain Harness code. A separate unofficial
+  DeepSeek Harness adapter was published after this historical release.

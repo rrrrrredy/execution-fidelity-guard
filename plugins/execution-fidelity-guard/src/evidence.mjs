@@ -22,6 +22,11 @@ function inferStatus(response) {
 }
 
 function isDirectTestCommand(command) {
+  if (
+    /(?:^|\s)(?:--help|-h|--version|--collect-only|--co|-list|--list|--list-tests|--if-present|--no-run)(?:=|\s|$)/i.test(
+      command,
+    )
+  ) return false;
   return /^\s*(?:node\s+--test|npm\s+(?:run\s+)?test|pnpm\s+(?:run\s+)?test|yarn\s+(?:run\s+)?test|pytest|cargo\s+test|go\s+test|dotnet\s+test)(?:\s+[^;&|<>`$(){}\r\n]*)?\s*$/i.test(
     command,
   );
@@ -31,12 +36,10 @@ function inferKind(input, action) {
   const command = action.command.toLowerCase();
   const toolName = action.toolName.toLowerCase();
   if (isDirectTestCommand(command)) return "test";
-  if (/^\s*gh\s+release\s+(?:create|view)\b/i.test(command)) return "release";
   if (toolName === "bash") return "command";
   if (toolName === "apply_patch" || action.tags.includes("write_workspace")) return "file";
   if (/(browser|playwright|screenshot|real_page)/.test(toolName)) return "real_page";
   if (toolName.startsWith("mcp__")) return "api";
-  if (action.tags.includes("publish")) return "release";
   return "command";
 }
 

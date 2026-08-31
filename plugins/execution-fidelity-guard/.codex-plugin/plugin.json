@@ -1,6 +1,6 @@
 {
   "name": "execution-fidelity-guard",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Apply explicit task action rules and evidence-aware completion checks at Codex Hook boundaries.",
   "author": {
     "name": "rrrrrredy",

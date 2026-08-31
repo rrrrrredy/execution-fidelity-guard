@@ -14,7 +14,7 @@
     "claim_boundary"
   ],
   "properties": {
-    "schema_version": { "const": "1.0" },
+    "schema_version": { "const": "1.1" },
     "kind": { "const": "execution-fidelity-guard-shadow-pilot-summary" },
     "generated_at": { "type": "string", "format": "date-time" },
     "input": {
@@ -36,9 +36,10 @@
     "sessions": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["unique", "with_pre_tool_use", "with_stop", "with_shadow_candidate"],
+      "required": ["unique", "in_shadow_mode", "with_pre_tool_use", "with_stop", "with_shadow_candidate"],
       "properties": {
         "unique": { "type": "integer", "minimum": 1 },
+        "in_shadow_mode": { "type": "integer", "minimum": 0 },
         "with_pre_tool_use": { "type": "integer", "minimum": 0 },
         "with_stop": { "type": "integer", "minimum": 0 },
         "with_shadow_candidate": { "type": "integer", "minimum": 0 }
@@ -47,9 +48,10 @@
     "sample_gate": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["target_sessions", "reached", "remaining"],
+      "required": ["target_sessions", "eligible_shadow_sessions", "reached", "remaining"],
       "properties": {
         "target_sessions": { "type": "integer", "minimum": 1 },
+        "eligible_shadow_sessions": { "type": "integer", "minimum": 0 },
         "reached": { "type": "boolean" },
         "remaining": { "type": "integer", "minimum": 0 }
       }

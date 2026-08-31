@@ -1,6 +1,6 @@
 {
   "name": "execution-fidelity-guard",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": false,
   "description": "Local-first Codex plugin for deterministic task-contract gates and evidence-aware completion checks.",
   "type": "module",
@@ -54,7 +54,7 @@
     "evals/manual-decision.schema.json",
     "evals/shadow-pilot-summary.schema.json",
     "evals/inventory-audit-2026-08-28.md",
-    "evals/hook-latency-windows-2026-08-31-v0.2.1.json",
+    "evals/hook-latency-windows-2026-08-31-v0.2.2.json",
     "scripts",
     "test",
     "test-support"

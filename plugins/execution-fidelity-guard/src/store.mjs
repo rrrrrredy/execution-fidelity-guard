@@ -20,7 +20,7 @@ import { makeId, safeId, sha256, stableStringify } from "./canonical.mjs";
 const RECORD_BUCKETS = new Set(["events", "receipts", "evidence"]);
 const SESSION_DIRECTORY_RE = /^session-[a-f0-9]{64}$/;
 const STOP_LOCK_STALE_MS = 30000;
-const STOP_LOCK_ATTEMPTS = 50;
+const STOP_LOCK_ATTEMPTS = 200;
 const STOP_LOCK_MAX_BYTES = 4096;
 const STOP_LOCK_RECLAIM_DEPTH = 8;
 const STOP_LOCK_HOST = hostname();

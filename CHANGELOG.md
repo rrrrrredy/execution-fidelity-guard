@@ -2,6 +2,55 @@
 
 All notable changes follow semantic versioning.
 
+## 0.2.2 - 2026-08-31
+
+### Security and correctness
+
+- Closed local-install classification bypasses involving environment and
+  scheduling wrappers, package-manager global options, versioned Python and
+  pip executables, grouped shell flags, and common indirect direct-exec forms.
+- Classified common dependency-changing add/update/upgrade, audit-fix, rebuild,
+  and global-tool verbs as local installation, including direct uv, Poetry,
+  Pipenv, Bundler, Gem, Go, .NET, Conda, Homebrew, Windows, Linux, and Cargo
+  forms covered by the action reference.
+- Added direct PowerShell and POSIX file-write coverage, HTTP mutation coverage,
+  and delete/destructive tags for explicit local and remote Git, GitHub, and
+  HTTP DELETE forms.
+- Distinguished read-only Git branch inspection from branch mutation and
+  prevented tool-name heuristics from overriding an explicit parsed command.
+- Excluded help, version, list, collection-only, `--if-present`, and
+  compile-without-running commands from automatic test evidence.
+- Removed automatic release evidence because the seven-field contract does not
+  bind an expected repository and tag; release-like commands remain command
+  evidence and cannot prove the intended public Release.
+- Made `off` emit no Hook policy or context output. In `shadow`, action
+  conflicts remain non-blocking reminders and missing completion evidence is
+  recorded without continuing or blocking the turn.
+- Increased the bounded local Stop-lock acquisition budget after a 20-process
+  contention regression exposed avoidable timeouts.
+
+### Evaluation integrity
+
+- Normalized events now record `guard_mode` as a minimal fact.
+- Shadow-pilot summary schema 1.1 counts only sessions whose exported events
+  consistently record `guard_mode=shadow`; off, balanced, and legacy
+  mode-unbound bundles remain diagnostic and cannot satisfy the sample gate.
+- Added negative regressions for the new classifier, evidence, mode, and sample
+  accounting boundaries.
+
+### Ecosystem
+
+- Published a separate unofficial DeepSeek Harness adapter pinned to Harness
+  `0.1.2-alpha.2`; this Codex package remains Host-specific.
+
+### Known limits
+
+- The 100-task real shadow cohort and 800-task controlled comparison remain
+  incomplete. Engineering checks do not establish product efficacy.
+- The exact 0.2.2 Windows command-Hook p95 is 134.57 ms over 100 runs against
+  the provisional 100 ms target; installed-client and macOS/Linux latency
+  remain unmeasured.
+
 ## 0.2.1 - 2026-08-31
 
 ### Added

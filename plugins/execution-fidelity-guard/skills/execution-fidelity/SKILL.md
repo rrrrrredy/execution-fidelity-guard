@@ -29,24 +29,39 @@ Do not infer that the latest message replaces the objective. Treat it as continu
 
 ## Inspect or establish a contract
 
+For an installed Skill, resolve the CLI path from the absolute path the Host
+used to load this file: the plugin root is two directories above `SKILL.md`.
+Use that literal absolute path in the command. Do not assume a `PLUGIN_ROOT`
+environment variable or copy the placeholder below unchanged. Node accepts
+forward slashes on Windows:
+
+    # PowerShell
+    node "C:/absolute/plugin/root/bin/efg.mjs" doctor
+
+    # bash/zsh
+    node "/absolute/plugin/root/bin/efg.mjs" doctor
+
+In the remaining installed-plugin examples, replace `<ABSOLUTE_PLUGIN_ROOT>`
+with the resolved literal path before running anything.
+
 Run the read-only diagnostic first:
 
-    node "${PLUGIN_ROOT}/bin/efg.mjs" doctor
+    node "<ABSOLUTE_PLUGIN_ROOT>/bin/efg.mjs" doctor
 
 From the repository root, use
 `node plugins/execution-fidelity-guard/bin/efg.mjs doctor`.
 
 If the fallback is unbound and the user wants one, create the template:
 
-    node "${PLUGIN_ROOT}/bin/efg.mjs" init
+    node "<ABSOLUTE_PLUGIN_ROOT>/bin/efg.mjs" init
 
 Review and replace every placeholder before relying on it. Do not overwrite an existing contract or create one merely to bypass a decision.
 
 When the user's explicit boundary forbids local installation, create a ready
 starting contract without inventing the objective or object:
 
-    node "${PLUGIN_ROOT}/bin/efg.mjs" init --preset no-local-install --objective "EXACT OUTCOME" --primary-object "PRIMARY OBJECT"
-    node "${PLUGIN_ROOT}/bin/efg.mjs" contract validate --json
+    node "<ABSOLUTE_PLUGIN_ROOT>/bin/efg.mjs" init --preset no-local-install --objective "EXACT OUTCOME" --primary-object "PRIMARY OBJECT"
+    node "<ABSOLUTE_PLUGIN_ROOT>/bin/efg.mjs" contract validate --json
 
 ## Deterministic action rules
 
@@ -71,7 +86,10 @@ action tags before relying on them.
 
 Natural-language constraints remain semantic candidates. They can remind but cannot hard-block by themselves. Do not rewrite natural language into a structured rule unless the user has made the same authorization boundary explicit.
 
-Default mode is `shadow`: record and explain would-block or would-ask decisions without enforcing them. Use `EFG_MODE=balanced` only after the contract has been reviewed. Never auto-approve a `PermissionRequest`.
+Default mode is `shadow`: pending tool conflicts become non-blocking reminders,
+and completion-evidence gaps are recorded without continuing the turn. Use
+`EFG_MODE=balanced` only after the contract has been reviewed. `off` emits no
+Hook policy context or decision. Never auto-approve a `PermissionRequest`.
 
 ## Handle a decision
 
@@ -85,11 +103,11 @@ Default mode is `shadow`: record and explain would-block or would-ask decisions 
 
 To reproduce a hook decision without installing the plugin:
 
-    node "${PLUGIN_ROOT}/bin/efg.mjs" check --event EVENT.json --contract CONTRACT.json
+    node "<ABSOLUTE_PLUGIN_ROOT>/bin/efg.mjs" check --event EVENT.json --contract CONTRACT.json
 
 For a content-free explanation of classification and policy, use:
 
-    node "${PLUGIN_ROOT}/bin/efg.mjs" explain --event EVENT.json --contract CONTRACT.json --mode balanced
+    node "<ABSOLUTE_PLUGIN_ROOT>/bin/efg.mjs" explain --event EVENT.json --contract CONTRACT.json --mode balanced
 
 Use `demo` for a no-write, no-install walkthrough.
 
@@ -100,12 +118,18 @@ evidence unless a requirement uses the exact deterministic form
 `evidence:<kind>` or `evidence:<kind>:action:<tag>`. A test can satisfy
 automatically only when it is one direct test command and the Host supplies a
 structured passing result; chains, pipes, redirects, and text that merely says
-"exit code 0" do not qualify.
+"exit code 0" do not qualify. Help, version, list, and collection-only commands
+also do not qualify.
+
+The current contract does not bind an expected release repository and tag, so
+release-like commands remain generic command evidence. Use an explicit
+artifact-observed or caller-attested record for a release requirement and state
+that its semantic sufficiency remains an attestation.
 
 For a natural-language requirement, prefer having Guard observe and hash the
 artifact bytes:
 
-    node "${PLUGIN_ROOT}/bin/efg.mjs" evidence add --session SESSION_REF --requirement 1 --kind test --status pass --artifact test-results.json
+    node "<ABSOLUTE_PLUGIN_ROOT>/bin/efg.mjs" evidence add --session SESSION_REF --requirement 1 --kind test --status pass --artifact test-results.json
 
 The CLI records this as `artifact_observed`. That proves only which bytes
 were read and hashed; the caller-supplied status and semantic sufficiency remain
@@ -124,8 +148,9 @@ session identifier. For a source-only trial with no Host events, choose one
 label and reuse it exactly. Treat `session_not_found` as a lookup error,
 not as proof that completion evidence is missing.
 
-The Stop hook uses a per-session lock and can continue verification at most
-twice for one contract even when matching Stop processes overlap. Reaching the
+In `balanced`, the Stop hook uses a per-session lock and can continue
+verification at most twice for one contract even when matching Stop processes
+overlap. In `shadow`, the same gap is recorded without continuing. Reaching the
 cap is a warning, not proof of completion. A lock or storage failure must not
 create an unbounded continuation loop.
 

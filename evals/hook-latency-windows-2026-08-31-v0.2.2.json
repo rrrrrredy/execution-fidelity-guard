@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0",
+  "measured_at": "2026-08-31T10:29:34.764Z",
+  "path": "command_hook_process_continue",
+  "event": "PreToolUse",
+  "decision": "continue",
+  "persistence": false,
+  "iterations": 100,
+  "warmup": 10,
+  "environment": {
+    "node": "v20.19.1",
+    "platform": "win32",
+    "arch": "x64",
+    "cpu_count": 8
+  },
+  "latency_ms": {
+    "p50": 123.14,
+    "p95": 134.57,
+    "max": 157.08
+  },
+  "diagnostic_node_process_floor_ms": {
+    "iterations": 100,
+    "p50": 87.59,
+    "p95": 117.13,
+    "max": 135.82
+  },
+  "claim_boundary": "One local machine and source checkout; not a cross-device service-level objective. The optional empty-Node process floor is diagnostic only and must not be subtracted to claim Guard latency or target compliance."
+}

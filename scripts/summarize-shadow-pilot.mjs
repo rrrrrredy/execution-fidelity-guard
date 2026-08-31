@@ -17,6 +17,7 @@ const DECISIONS = new Set([
   "continue_verification",
 ]);
 const COVERAGE = new Set(["observed", "partial", "unobserved"]);
+const GUARD_MODES = new Set(["shadow", "balanced", "off"]);
 const EVENT_TYPES = new Set([
   "session_start",
   "subagent_start",
@@ -38,6 +39,7 @@ const REASON_CODES = new Set([
   "shadow_would_block",
   "explicit_contract_conflict",
   "shadow_would_ask",
+  "shadow_would_continue_verification",
   "explicit_user_authorization_required",
   "semantic_constraint_candidate",
   "no_deterministic_match",
@@ -154,6 +156,7 @@ function validateBundle(bundle, sourceLabel) {
   }
   const eventIds = new Set();
   const eventsById = new Map();
+  const guardModes = new Set();
   for (const [index, event] of bundle.events.entries()) {
     const label = sourceLabel + " event #" + (index + 1);
     if (
@@ -173,6 +176,11 @@ function validateBundle(bundle, sourceLabel) {
     if (!EVENT_TYPES.has(event.event_type)) {
       fail(label + " has an unsupported event_type");
     }
+    const guardMode = event.facts?.guard_mode;
+    if (guardMode !== undefined && !GUARD_MODES.has(guardMode)) {
+      fail(label + " has an unsupported guard_mode");
+    }
+    guardModes.add(guardMode ?? "unknown");
     if (
       typeof event.contract_ref !== "string" ||
       !event.contract_ref ||
@@ -183,6 +191,9 @@ function validateBundle(bundle, sourceLabel) {
     }
     eventIds.add(event.event_id);
     eventsById.set(event.event_id, event);
+  }
+  if (guardModes.size !== 1) {
+    fail(sourceLabel + " mixes guard_mode values within one session");
   }
   const receiptEventRefs = new Set();
   for (const [index, receipt] of bundle.receipts.entries()) {
@@ -234,7 +245,7 @@ function validateBundle(bundle, sourceLabel) {
       fail(label + " has invalid latency_ms");
     }
   }
-  return bundle;
+  return { bundle, guardMode: [...guardModes][0] };
 }
 
 export function summarizePilotBundles(entries, options = {}) {
@@ -263,12 +274,14 @@ export function summarizePilotBundles(entries, options = {}) {
   const sessionsWithPreTool = new Set();
   const sessionsWithStop = new Set();
   const sessionsWithCandidate = new Set();
+  const sessionsInShadowMode = new Set();
 
   for (const entry of entries) {
     if (!/^[a-f0-9]{64}$/.test(String(entry.sha256 ?? ""))) {
       fail(entry.label + " has an invalid bundle SHA-256");
     }
-    const bundle = validateBundle(entry.bundle, entry.label);
+    const validated = validateBundle(entry.bundle, entry.label);
+    const bundle = validated.bundle;
     if (sessions.has(bundle.session_ref)) {
       fail(
         "duplicate session_ref across receipt bundles: " +
@@ -277,6 +290,9 @@ export function summarizePilotBundles(entries, options = {}) {
       );
     }
     sessions.add(bundle.session_ref);
+    if (validated.guardMode === "shadow") {
+      sessionsInShadowMode.add(bundle.session_ref);
+    }
     bundleHashes.push(entry.sha256);
 
     for (const event of bundle.events) {
@@ -319,7 +335,7 @@ export function summarizePilotBundles(entries, options = {}) {
   ).length;
 
   return {
-    schema_version: "1.0",
+    schema_version: "1.1",
     kind: "execution-fidelity-guard-shadow-pilot-summary",
     generated_at: new Date(options.now ?? Date.now()).toISOString(),
     input: {
@@ -329,14 +345,16 @@ export function summarizePilotBundles(entries, options = {}) {
     },
     sessions: {
       unique: sessions.size,
+      in_shadow_mode: sessionsInShadowMode.size,
       with_pre_tool_use: sessionsWithPreTool.size,
       with_stop: sessionsWithStop.size,
       with_shadow_candidate: sessionsWithCandidate.size,
     },
     sample_gate: {
       target_sessions: targetSessions,
-      reached: sessions.size >= targetSessions,
-      remaining: Math.max(0, targetSessions - sessions.size),
+      eligible_shadow_sessions: sessionsInShadowMode.size,
+      reached: sessionsInShadowMode.size >= targetSessions,
+      remaining: Math.max(0, targetSessions - sessionsInShadowMode.size),
     },
     observations: {
       events: events.length,
@@ -360,6 +378,7 @@ export function summarizePilotBundles(entries, options = {}) {
     claim_boundary: [
       "The report proves only what is present in the supplied pseudonymous receipt exports.",
       "A unique session receipt does not by itself prove that the session was a real user task or that tasks were independently sampled.",
+      "Only sessions whose exported normalized events consistently record guard_mode=shadow count toward the sample gate; older or mode-unbound exports remain diagnostic only.",
       "Without user, external-evidence, or domain-rule adjudication, this report does not establish precision, false-positive rate, intervention efficacy, rework reduction, or outcome improvement.",
       "Receipt latency starts inside the loaded Guard runtime; use the command-Hook benchmark for end-to-end process latency.",
     ],

@@ -38,10 +38,83 @@ test("classifies explicit and implicit local package installation commands", () 
     "sudo -u root apt install jq",
     "env -u CI npm install lodash",
     "env -C app npm install lodash",
+    "npm --loglevel warn install lodash",
+    "pip --index-url https://example.invalid/simple install pytest",
+    "python3.11 -m pip --index-url https://example.invalid/simple install pytest",
+    "pnpm --filter app add lodash",
+    "cargo --color always install ripgrep",
+    "command -- npm install lodash",
+    "command -p npm install lodash",
+    "nohup -- npm install lodash",
+    "nice -n 5 npm install lodash",
+    "timeout 30 npm install lodash",
+    "exec npm install lodash",
+    "exec -a npm npm install lodash",
+    "time npm install lodash",
+    "time -f %e npm install lodash",
+    "/usr/bin/time --output timing.txt npm install lodash",
+    'sh -c "exec npm install lodash"',
+    'sh -c "time -p npm install lodash"',
+    "FOO=bar exec npm install lodash",
+    "FOO=bar time npm install lodash",
+    "FOO=bar time -p env CI=1 exec npm install lodash",
+    String.raw`sh -c 'sh -c "sh -c \"npm install lodash\""'`,
+    String.raw`sh -c 'sh -c "sh -c \"sh -c \\\"npm install lodash\\\"\""'`,
+    "env env env env env env env env env npm install lodash",
+    "env -S \"npm install lodash\"",
+    "env --split-string=\"npm install lodash\"",
+    "env -S npm\\ install\\ lodash",
+    "env --split-string=npm\\ install\\ lodash",
+    "sudo -H apt install jq",
+    "sudo -E -H apt install jq",
+    "sh -ec \"npm install lodash\"",
+    "bash -xec \"npm install lodash\"",
+    "npm add lodash",
+    "yarn --cwd app dlx create-vite",
+    "yarn global add typescript",
+    "yarn global upgrade typescript",
+    "dotnet tool update --global dotnet-ef",
+    "npm update lodash",
+    "pnpm update lodash",
+    "yarn up lodash",
+    "npm audit fix",
+    "pnpm audit --fix",
+    "npm rebuild",
+    "pnpm rebuild",
+    "uv add requests",
+    "poetry add requests",
+    "poetry update",
+    "pipenv update",
+    "bundle update",
+    "gem update",
+    "go get example.com/module@latest",
+    "dotnet add package Example.Package",
+    "conda update numpy",
+    "brew upgrade jq",
+    "winget upgrade Demo.App",
+    "choco upgrade git",
+    "apt upgrade",
+    "dnf update",
+    "yum upgrade",
+    "cargo add serde",
+    "cargo update",
   ];
   for (const command of commands) {
     const action = classifyToolAction(preToolInput(command));
     assert.ok(action.tags.includes("install_local"), command);
+    assert.equal(action.reversible, false, command);
+  }
+});
+
+test("classifies dependency removal and update as workspace mutation", () => {
+  for (const command of [
+    "npm uninstall lodash",
+    "pnpm --filter app remove lodash",
+    "yarn global remove typescript",
+    "dotnet tool uninstall --global dotnet-ef",
+  ]) {
+    const action = classifyToolAction(preToolInput(command));
+    assert.ok(action.tags.includes("write_workspace"), command);
     assert.equal(action.reversible, false, command);
   }
 });
@@ -52,6 +125,18 @@ test("does not classify documentation searches or normal test runs as installati
     "Get-Content install-notes.md",
     "npm run test",
     "node --test",
+    "npm --loglevel warn test",
+    "pip --index-url https://example.invalid/simple list",
+    "pnpm --filter app test",
+    "cargo --color always test",
+    "timeout --help",
+    "nice -n 5 npm test",
+    "exec npm test",
+    "time -p npm test",
+    "command -v npm install",
+    "command -V npm install",
+    "sh -e \"npm test\"",
+    "bash -- \"npm install lodash\"",
     'node -e "console.log(\\"pip install\\")"',
   ];
   for (const command of commands) {
@@ -64,6 +149,23 @@ test("detects destructive git branch deletion", () => {
   const action = classifyToolAction(preToolInput("git branch -D temporary"));
   assert.ok(action.tags.includes("delete"));
   assert.ok(action.tags.includes("destructive"));
+});
+
+test("distinguishes git branch inspection from ref and config mutation", () => {
+  for (const command of ["git branch", "git branch --list feature", "git branch --show-current"]) {
+    const action = classifyToolAction(preToolInput(command));
+    assert.ok(action.tags.includes("read"), command);
+    assert.equal(action.tags.includes("write_workspace"), false, command);
+  }
+  for (const command of [
+    "git branch new-feature",
+    "git branch -M main",
+    "git branch --set-upstream-to=origin/main main",
+  ]) {
+    const action = classifyToolAction(preToolInput(command));
+    assert.ok(action.tags.includes("write_workspace"), command);
+    assert.equal(action.reversible, false, command);
+  }
 });
 
 test("classifies common direct mutation forms before structured policy", () => {
@@ -87,6 +189,20 @@ test("classifies common direct mutation forms before structured policy", () => {
     ["git stash", "write_workspace", "action:write"],
     ["git switch feature", "write_workspace", "action:write"],
     ["git worktree add ../trial feature", "write_workspace", "action:write"],
+    ["Write-Output hi | Out-File note.txt", "write_workspace", "action:write"],
+    ["Out-File -FilePath note.txt -InputObject hi", "write_workspace", "action:write"],
+    ["Clear-Content note.txt", "write_workspace", "action:write"],
+    ["Rename-Item old.txt new.txt", "write_workspace", "action:write"],
+    ["Get-Process | Export-Csv processes.csv", "write_workspace", "action:write"],
+    ["Get-Process | Export-Clixml processes.xml", "write_workspace", "action:write"],
+    ["Start-Transcript transcript.txt", "write_workspace", "action:write"],
+    ["ln -s source target", "write_workspace", "action:write"],
+    ["chmod 600 secret.txt", "write_workspace", "action:write"],
+    ["chown user file.txt", "write_workspace", "action:write"],
+    ["truncate -s 0 file.txt", "write_workspace", "action:write"],
+    ["patch -p1 < changes.diff", "write_workspace", "action:write"],
+    ["dd if=source.img of=target.img", "write_workspace", "action:write"],
+    ["install source.bin destination.bin", "write_workspace", "action:write"],
   ];
   for (const [command, tag, rule] of cases) {
     const action = classifyToolAction(preToolInput(command));
@@ -131,6 +247,79 @@ test("classifies mutations behind common global command options", () => {
   }
 });
 
+test("classifies direct HTTP mutations as external side effects", () => {
+  for (const command of [
+    "curl -X POST https://example.invalid/items",
+    "curl --data x=1 https://example.invalid/items",
+    "curl -F file=@note.txt https://example.invalid/upload",
+    "curl -T note.txt https://example.invalid/upload",
+    "wget --post-data=x=1 https://example.invalid/items",
+    "wget --method=DELETE https://example.invalid/items/1",
+    "Invoke-RestMethod -Method Post https://example.invalid/items",
+    "iwr -Method Delete https://example.invalid/items/1",
+  ]) {
+    const action = classifyToolAction(preToolInput(command));
+    assert.ok(action.tags.includes("external_side_effect"), command);
+    const decision = decidePreTool({
+      binding: makeBinding(makeContract({ forbidden: ["action:external"] })),
+      action,
+      mode: "balanced",
+    });
+    assert.equal(decision.decision, "block", command);
+  }
+  for (const command of [
+    "curl https://example.invalid/items",
+    "curl -X HEAD https://example.invalid/items",
+    "wget https://example.invalid/items",
+    "irm -Method Get https://example.invalid/items",
+  ]) {
+    const action = classifyToolAction(preToolInput(command));
+    assert.equal(action.tags.includes("external_side_effect"), false, command);
+    assert.ok(action.tags.includes("network"), command);
+  }
+});
+
+test("classifies direct Git deletion subcommands", () => {
+  for (const command of [
+    "git tag -d v1",
+    "git stash drop",
+    "git stash clear",
+    "git worktree remove ../trial",
+    "git worktree prune",
+  ]) {
+    const action = classifyToolAction(preToolInput(command));
+    assert.ok(action.tags.includes("delete"), command);
+    assert.ok(action.tags.includes("destructive"), command);
+    assert.equal(decidePreTool({
+      binding: makeBinding(makeContract({ forbidden: ["action:delete"] })),
+      action,
+      mode: "balanced",
+    }).decision, "block", command);
+  }
+  const remote = classifyToolAction(preToolInput("git remote remove origin"));
+  assert.ok(remote.tags.includes("write_workspace"));
+  for (const command of [
+    "git push --delete origin feature",
+    "git push origin :feature",
+    "gh repo delete owner/repo --yes",
+    "gh release delete v1 --yes",
+    "gh api -X DELETE repos/owner/repo/issues/1",
+    "curl -X DELETE https://example.invalid/items/1",
+    "wget --method=DELETE https://example.invalid/items/1",
+    "iwr -Method Delete https://example.invalid/items/1",
+  ]) {
+    const action = classifyToolAction(preToolInput(command));
+    assert.ok(action.tags.includes("delete"), command);
+    assert.ok(action.tags.includes("destructive"), command);
+    assert.ok(action.tags.includes("external_side_effect"), command);
+    assert.equal(decidePreTool({
+      binding: makeBinding(makeContract({ forbidden: ["action:delete"] })),
+      action,
+      mode: "balanced",
+    }).decision, "block", command);
+  }
+});
+
 test("similar read-only or non-install forms remain outside mutation tags", () => {
   const cases = [
     ["npm --prefix . run test", "install_local"],
@@ -151,6 +340,9 @@ test("similar read-only or non-install forms remain outside mutation tags", () =
     ["git stash list", "write_workspace"],
     ["git stash show", "write_workspace"],
     ["git worktree list", "write_workspace"],
+    ["chmod --help", "write_workspace"],
+    ["patch --dry-run -p1 < changes.diff", "write_workspace"],
+    ["dd if=source.img", "write_workspace"],
   ];
   for (const [command, tag] of cases) {
     const action = classifyToolAction(preToolInput(command));
@@ -165,6 +357,8 @@ test("named external mutations do not fall through as reads", () => {
     "mcp__github__merge_pull_request",
     "mcp__codex_app__automation_update",
     "mcp__codex_app__reorder_section",
+    "mcp__server__database_update",
+    "mcp__server__update_preview",
   ]) {
     const action = classifyToolAction({ tool_name: toolName, tool_input: {} });
     assert.ok(action.tags.includes("external_side_effect"), toolName);
@@ -182,6 +376,16 @@ test("unknown named tools stay unknown instead of matching read inside another w
     tool_input: {},
   });
   assert.deepEqual(action.tags, ["unknown"]);
+});
+
+test("read-prefixed named tools take precedence over a later update noun", () => {
+  for (const toolName of [
+    "mcp__server__list_updates",
+    "mcp__server__get_update_status",
+  ]) {
+    const action = classifyToolAction({ tool_name: toolName, tool_input: {} });
+    assert.deepEqual(action.tags, ["read"], toolName);
+  }
 });
 
 test("workspace writes are not claimed to be reversible", () => {

@@ -71,7 +71,7 @@ async function validate() {
     "evals/replay-manifest.json",
     "evals/replay-coverage.json",
     "evals/shadow-pilot-summary.schema.json",
-    "evals/hook-latency-windows-2026-08-31-v0.2.1.json",
+    "evals/hook-latency-windows-2026-08-31-v0.2.2.json",
     "scripts/benchmark-hook.mjs",
     "scripts/summarize-shadow-pilot.mjs",
     "scripts/assert-source-simulation.mjs",
@@ -101,7 +101,7 @@ async function validate() {
     "evals/shadow-pilot-summary.schema.json",
   );
   const latency = await readJson(
-    "evals/hook-latency-windows-2026-08-31-v0.2.1.json",
+    "evals/hook-latency-windows-2026-08-31-v0.2.2.json",
   );
   const normalizedEventSchema = await readJson(
     "plugins/execution-fidelity-guard/spec/normalized-event.schema.json",
@@ -171,7 +171,7 @@ async function validate() {
     "evals/replay-coverage.json",
     "evals/shadow-pilot-summary.schema.json",
     "evals/inventory-audit-2026-08-28.md",
-    "evals/hook-latency-windows-2026-08-31-v0.2.1.json",
+    "evals/hook-latency-windows-2026-08-31-v0.2.2.json",
     "scripts",
     "test",
     "test-support",

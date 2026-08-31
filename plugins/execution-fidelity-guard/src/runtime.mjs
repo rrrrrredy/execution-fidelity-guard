@@ -80,8 +80,8 @@ function eventHashInput(input) {
   }
 }
 
-function eventFacts(input, binding, action) {
-  const facts = { contract_status: binding.status };
+function eventFacts(input, binding, action, mode) {
+  const facts = { contract_status: binding.status, guard_mode: mode };
   if (binding.status === "bound") facts.contract_provider = binding.provider;
   if (input.permission_mode) facts.permission_mode = String(input.permission_mode);
   if (input.source) facts.source = String(input.source);
@@ -95,7 +95,7 @@ function eventFacts(input, binding, action) {
   return facts;
 }
 
-function normalizedEvent(input, binding, action, now) {
+function normalizedEvent(input, binding, action, mode, now) {
   const identity = contractIdentity(binding);
   const eventType = toEventType(input.hook_event_name);
   return {
@@ -124,7 +124,7 @@ function normalizedEvent(input, binding, action, now) {
       input.hook_event_name === "PostToolUse"
         ? sha256(input.tool_response ?? null)
         : null,
-    facts: eventFacts(input, binding, action),
+    facts: eventFacts(input, binding, action, mode),
   };
 }
 
@@ -262,6 +262,27 @@ async function stopDecision({
     .map((item) => "#" + (item.index + 1))
     .join(", ");
 
+  if (config.mode === "shadow") {
+    const warning =
+      "Execution Fidelity Guard observed a completion claim without full, passing evidence for requirement(s) " +
+      missingIndexes +
+      ". Shadow mode recorded that balanced mode would request another verification pass; it did not continue or block this turn.";
+    return {
+      decision: continueDecision({
+        decision: "remind",
+        authority: "external_evidence",
+        severity: "medium",
+        reasonCodes: [
+          "shadow_would_continue_verification",
+          "completion_claim_unverified",
+        ],
+        visibility: "silent",
+        unlock: warning,
+      }),
+      output: null,
+    };
+  }
+
   let transition;
   if (config.persist) {
     transition = await bestEffort(() =>
@@ -364,7 +385,7 @@ export async function handleHook(input, options = {}) {
   const action = ["PreToolUse", "PermissionRequest", "PostToolUse"].includes(eventName)
     ? classifyToolAction(input)
     : null;
-  const event = normalizedEvent(input, binding, action, now);
+  const event = normalizedEvent(input, binding, action, config.mode, now);
   if (store) {
     await bestEffort(() => store.writeRecord(config, sessionId, "events", event));
   }
@@ -373,6 +394,23 @@ export async function handleHook(input, options = {}) {
     coverage: binding.status === "bound" ? "observed" : "partial",
   });
   let output = null;
+
+  if (config.mode === "off") {
+    decision = continueDecision({
+      reasonCodes: ["guard_disabled"],
+      coverage: "unobserved",
+    });
+    const receipt = receiptFor(event, decision, now, Date.now() - startedAt);
+    if (store) {
+      await bestEffort(() =>
+        store.writeRecord(config, sessionId, "receipts", receipt),
+      );
+    }
+    if (eventName === "SessionEnd" && config.deleteOnSessionEnd && store) {
+      await bestEffort(() => store.deleteSession(config, sessionId));
+    }
+    return null;
+  }
 
   if (eventName === "SessionStart") {
     output = {

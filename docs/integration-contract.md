@@ -1,6 +1,7 @@
 # Intent, continuity, guard, and host integration contract
 
-Status: frozen for Execution Fidelity Guard 0.2.1.
+Status: frozen for Execution Fidelity Guard 0.2.2 and the separate unofficial
+DeepSeek Harness adapter 0.1.0-alpha.2.
 
 This contract keeps four products from becoming competing sources of truth.
 It describes the interface implemented by this repository and names the
@@ -69,12 +70,19 @@ standalone fallback envelope is rejected so the caller cannot reuse a stale
 ## Version semantics
 
 - Provider documents and bare TaskContractLite inputs use wire schema `1.0`,
-  which runtime 0.2.1 accepts exactly. Continuity snapshots and decision
+  which runtime 0.2.2 accepts exactly. Continuity snapshots and decision
   receipts also remain `1.0`.
 - Guard-owned normalized event and evidence-record outputs use wire schema
-  `2.0`, introduced in runtime 0.2.0 and retained in 0.2.1. The major bump covers new subagent event values,
+  `2.0`, introduced in runtime 0.2.0 and retained in 0.2.2. The major bump covers new subagent event values,
   pseudonymous Host identifier semantics, and artifact attestation that strict
-  1.0 consumers cannot safely assume they understand.
+  1.0 consumers cannot safely assume they understand. The `facts` object is an
+  intentionally open extension point already present in event schema 2.0;
+  runtime 0.2.2 documents the optional token `guard_mode` there without
+  changing the envelope, required fields, or their semantics. A compatible
+  envelope or required-semantics addition would require a documented wire
+  minor version.
+- Shadow-pilot summaries use wire schema `1.1`; their sample gate counts only
+  sessions whose events consistently record `guard_mode=shadow`.
 - Package version and wire `schema_version` are independent. Consumers select
   the matching schema for each record. Any future incompatible shape requires
   another wire major version; compatible additions require a documented minor
@@ -87,7 +95,7 @@ standalone fallback envelope is rejected so the caller cannot reuse a stale
   the same canonical projection is allowed; changing the projection requires a
   larger version.
 - `snapshot_sha256` proves that the current document and projection agree. Guard
-  0.2.1 does not maintain a global version ledger, so it cannot prove that a
+  0.2.2 does not maintain a global version ledger, so it cannot prove that a
   provider never reused a version with a different, newly hashed projection or
   that versions were globally monotonic across erased state.
 - `updated_at` and `source_message_refs` are provenance. They do not override the
@@ -111,11 +119,14 @@ Guard does not write any state back to Intent Loop or Continuity. It only:
    responses to the Host; and
 4. accepts an explicit manual evidence record through its own CLI.
 
-A `requires_user` decision remains denied until the owner changes the
-contract. A user answer in chat is not consumed by Guard. Intent Loop records
-the approved bounded action in a higher contract version; a reviewed
-TaskContractLite fallback must be edited so its content-derived identity
-changes. Retrying the unchanged contract asks again.
+`requires_user` follows the Host's approval surface without transferring state
+ownership. On Codex, Guard has no native one-call ask result: the action remains
+denied until Intent Loop publishes a higher contract version, or a reviewed
+TaskContractLite fallback is edited so its content-derived identity changes.
+A chat answer is not consumed by Codex Guard, and retrying the unchanged
+contract asks again. On DeepSeek Harness, native ask can authorize only that
+exact pending call. It does not modify the contract, write Intent or Continuity
+state, or authorize a later similar call; the later call asks again.
 
 `authorization.allowed` is not a closed allowlist. It records an explicit
 positive match, while an unlisted action continues unless `forbidden`,
@@ -125,7 +136,7 @@ an incomplete allowed list.
 The shipped `continuity-snapshot.schema.json` reserves the smallest future
 Continuity interchange: `contract_ref`, `contract_version`, `phase`,
 `open_commitments`, `evidence_refs`, and `captured_at`, plus schema version.
-Guard 0.2.1 does not load that snapshot and no live Continuity bridge is
+Guard 0.2.2 does not load that snapshot and no live Continuity bridge is
 implemented.
 
 ## Not implemented, not verified, or not guaranteed
@@ -133,8 +144,10 @@ implemented.
 - No live Intent Loop adapter has been integrated; only file-based provider
   document loading and validation are implemented.
 - No live Continuity producer or consumer bridge has been implemented.
-- No DeepSeek Harness or other non-Codex Host adapter has been implemented or
-  verified; the 0.2.1 package is Codex-specific.
+- This Codex package is Host-specific. A separate unofficial DeepSeek Harness
+  adapter is implemented against Harness `0.1.2-alpha.2`; its source and real
+  ToolRuntime/AgentLoop composition are tested, but installed-profile UX and
+  future Harness alphas are not guaranteed.
 - The plugin was not installed into the maintainer's local Codex environment,
   so installed-client discovery and end-to-end Hook delivery remain unverified.
 - Hosted WebSearch, specialized tools that opt out of Hooks, and later
@@ -148,19 +161,24 @@ implemented.
 - Stop is a turn boundary, not authoritative goal completion.
 - The frozen 41-failure and 40-success inventory proves corpus coverage, not
   81-case runtime accuracy, false-positive rate, or outcome improvement.
-- The measured Windows source continue path was 296.05 ms p95 with persistence
-  disabled; an empty Node process measured 189.73 ms p95 in the same run. The
+- The exact 0.2.2 Windows source continue path measured 134.57 ms p95 over 100
+  runs with persistence disabled; 100 empty Node processes measured 117.13 ms
+  p95 in the same run. The
   process floor is diagnostic only, the full path misses the provisional 100 ms
   target, and installed-client, macOS, and Linux latency remain unmeasured.
 - No 100-task real shadow cohort or 800-task controlled online comparison has
   been completed. The shipped aggregator freezes receipt bundles and counts
-  sessions; it does not establish real sampling, accuracy, efficacy, or outcome
-  improvement without adjudication and controlled execution.
-- There is no semantic model in 0.2.1, and natural-language rules cannot become
+  only mode-proven shadow sessions; it does not establish real sampling,
+  accuracy, efficacy, or outcome improvement without adjudication and
+  controlled execution.
+- There is no semantic model in 0.2.2, and natural-language rules cannot become
   hard blocks by themselves.
 - Objective, primary-object, delivery-surface, scope, and must fields are
-  bounded Agent context, not deterministic gate inputs in 0.2.1. Cost is not
-  represented in the 0.2.1 input schema and is not gated.
+  bounded Agent context, not deterministic gate inputs in 0.2.2. Cost is not
+  represented in the 0.2.2 input schema and is not gated.
+- The seven-field input has no expected release repository or tag. Neither
+  adapter creates automatic `release` evidence from generic release commands;
+  a Host or user must verify the intended public Release separately.
 - `artifact_observed` evidence proves only which local file bytes Guard
   read and hashed. The status and semantic sufficiency remain caller claims;
   label-plus-digest evidence remains fully caller-attested.

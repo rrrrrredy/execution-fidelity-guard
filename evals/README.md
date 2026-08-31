@@ -79,3 +79,8 @@ external adjudication is still required for precision and false-positive
 claims, while controlled re-execution is required for rework, user-time,
 acceptance, and outcome claims. The output shape is frozen in
 `evals/shadow-pilot-summary.schema.json`.
+
+Summary schema 1.1 counts a session toward the shadow target only when every
+exported normalized event in that session consistently records
+`facts.guard_mode` as `shadow`. Off, balanced, and older mode-unbound exports
+remain visible in diagnostic totals but cannot satisfy the gate.

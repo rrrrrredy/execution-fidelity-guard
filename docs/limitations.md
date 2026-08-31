@@ -27,17 +27,18 @@ Execution Fidelity Guard reduces a narrow class of execution drift. It cannot pr
   not prove the claim is true or the artifact is semantically sufficient.
 - CLI evidence supplied as a label plus digest remains caller-attested.
 - Objective, primary object, delivery surface, scope, and must fields are
-  bounded Agent context, not deterministic gate inputs in 0.2.1. Cost is not
-  represented in the 0.2.1 contract. Hard decisions use explicit structured
+  bounded Agent context, not deterministic gate inputs in 0.2.2. Cost is not
+  represented in the 0.2.2 contract. Hard decisions use explicit structured
   action, tool, or command-prefix rules only.
 - Stop is a turn boundary. A warning after the two-attempt cap is not a completion verdict.
 
 ## Operational limits
 
 - Node.js 20 or later must be available to the Codex process.
-- Command Hooks start a Node process for each event. The 0.2.1 Windows source
-  snapshot measured 296.05 ms p95 on the continue path with persistence
-  disabled, while an empty Node process in the same run measured 189.73 ms p95.
+- Command Hooks start a Node process for each event. The exact 0.2.2 Windows
+  source snapshot measured 134.57 ms p95 over 100 continue-path runs with
+  persistence disabled, while 100 empty Node processes in the same run measured
+  117.13 ms p95.
   The latter is diagnostic only and is not subtracted from Guard latency. The
   full path remains above the provisional 100 ms PRD target. Other hosts can
   differ.
@@ -52,6 +53,9 @@ Execution Fidelity Guard reduces a narrow class of execution drift. It cannot pr
   semantics. A lock failure produces a reminder and no automatic continuation.
 - The live Intent Loop adapter and Continuity bridge are not implemented; the
   provider interface is a local file and the Continuity schema is reserved.
+- The separate unofficial DeepSeek Harness adapter is pinned to upstream
+  `0.1.2-alpha.2`, stores receipts only in memory, and has no locally installed
+  profile walkthrough in this release process.
 - A provider projection hash validates one document but does not prove global
   contract-version monotonicity across erased state.
 - Receipt files are not signed and can be modified by a local process with filesystem access.
@@ -61,7 +65,12 @@ Execution Fidelity Guard reduces a narrow class of execution drift. It cannot pr
 - Windows ACL inheritance is platform-managed; the runtime requests restrictive file modes where the platform supports them.
 - There is no remote dashboard, telemetry service, or cross-machine synchronization.
 - The repository can aggregate pseudonymous receipt bundles toward a shadow
-  sample target, but no 100-task real shadow cohort or 800-task controlled
-  online comparison has been completed for this release.
+  sample target. Only sessions whose events consistently record
+  `guard_mode=shadow` count toward that gate. No 100-task real shadow cohort or
+  800-task controlled online comparison has been completed for this release.
+
+In `shadow`, pending-tool conflicts are non-blocking reminders and completion
+gaps are recorded without turn steering. `balanced` is the only enforcing and
+completion-continuing mode; `off` emits no Hook policy or context output.
 
 Use `shadow` mode first and inspect real would-block receipts before enabling `balanced` in consequential workflows.

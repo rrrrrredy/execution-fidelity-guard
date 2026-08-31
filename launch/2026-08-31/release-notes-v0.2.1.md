@@ -42,5 +42,6 @@ evidence when an Agent claims completion.
   machine because this release process forbids local installation.
 - Product efficacy, false-positive rate, rework reduction, and outcome
   improvement are not yet established by controlled real-world use.
-- Live Intent Loop, Continuity, DeepSeek Harness, and other Host adapters are
-  not implemented.
+- Live Intent Loop and Continuity bridges are not implemented. This historical
+  Codex release contains no Harness code; a separate unofficial DeepSeek
+  Harness adapter was published later.

@@ -11,19 +11,19 @@ against contract-bound evidence.
 It targets a specific failure: the Agent remembers the broad goal but quietly
 crosses an explicit action or authorization boundary, or claims completion
 without the required evidence. The objective, object, delivery surface, and
-scope fields remain bounded context in 0.2.1; they are not deterministic,
+scope fields remain bounded context in 0.2.2; they are not deterministic,
 path-aware gates.
 
-Version 0.2.1 is an open-source preview. It is usable today, but it is a guardrail, not a sandbox or complete security boundary.
+Version 0.2.2 is an open-source preview. It is usable today, but it is a guardrail, not a sandbox or complete security boundary. DeepSeek Harness users should use the separate [unofficial Harness adapter](https://github.com/rrrrrredy/dsh-execution-fidelity-guard), which is pinned to one upstream alpha.
 
 ## What it does
 
 - Loads a provider-owned intent contract or a strict seven-field TaskContractLite fallback.
 - Classifies local tool actions before execution.
-- Blocks only deterministic contract conflicts.
-- Pauses `requires_user` actions until the user answers and the canonical contract owner publishes a revised contract that records the allowance.
+- In `balanced`, blocks only deterministic contract conflicts.
+- In `balanced`, pauses `requires_user` actions until the user answers and the canonical contract owner publishes a revised contract that records the allowance. `shadow` reminds and proceeds.
 - Records result and decision receipts without retaining prompt, command, or output content.
-- Continues an explicit completion claim when required evidence is missing, with an atomic two-attempt cap per session and contract.
+- In `balanced`, continues an explicit completion claim when required evidence is missing, with an atomic two-attempt cap per session and contract. In `shadow`, it records the same gap without steering the turn.
 - Reinjects the compact active contract when Codex starts a subagent.
 - Starts in `shadow` mode so teams can measure would-block behavior before enforcement.
 
@@ -35,7 +35,7 @@ Version 0.2.1 is an open-source preview. It is usable today, but it is a guardra
 | `remind` | Possible semantic or coverage concern | Adds concise context; never hard-blocks |
 | `ask` | An explicit rule requires user authorization | Denies the pending action and supplies the question |
 | `block` | An explicit structured rule conflicts | Denies before the action runs |
-| `continue_verification` | Completion evidence is missing or failed | Requests one focused verification pass |
+| `continue_verification` | Completion evidence is missing or failed in `balanced` | Requests one focused verification pass |
 
 Execution Fidelity Guard never auto-approves native Codex permission requests.
 
@@ -68,7 +68,7 @@ The supported Host surface is Codex CLI and Codex desktop environments where
 plugins are available. The Codex IDE extension does not currently support
 plugins, so this Guard cannot run there.
 
-    codex plugin marketplace add rrrrrredy/execution-fidelity-guard --ref v0.2.1
+    codex plugin marketplace add rrrrrredy/execution-fidelity-guard --ref v0.2.2
     codex plugin add execution-fidelity-guard@execution-fidelity-guard
 
 Start a new Codex task after installation so the Skill and Hooks are discovered. These commands modify local Codex plugin state; they are not needed for source evaluation.
@@ -115,9 +115,9 @@ between Intent Loop, Continuity, Guard, and Codex, read the
 
 ## Modes
 
-- `shadow` is the default. It records deterministic would-block and would-ask decisions as reminders.
-- `balanced` enforces explicit structured `forbidden`, `must_not`, and `requires_user` rules.
-- `off` records coverage as unobserved and applies no policy.
+- `shadow` is the default. Pending tool conflicts become non-blocking reminders; missing completion evidence is recorded silently and never continues or blocks the turn.
+- `balanced` enforces explicit structured `forbidden`, `must_not`, and `requires_user` rules and may request at most two focused completion-verification passes.
+- `off` emits no Hook policy or context output. If persistence was explicitly enabled, its internal receipt marks coverage unobserved.
 
 Set a mode for the Codex process with `EFG_MODE`. Do not switch to `balanced` until the contract has been reviewed.
 
@@ -136,7 +136,9 @@ Other optional environment variables:
 A passing Hook-observed result automatically satisfies a requirement only when
 the requirement is deterministic and the Host reports a structured success.
 For `evidence:test`, the shell command must be one direct test command; chained,
-piped, redirected, or merely printed test text cannot satisfy it automatically:
+piped, redirected, or merely printed test text cannot satisfy it automatically.
+Help, version, list, collection-only, `npm --if-present`, and compile-without-
+running forms such as `cargo test --no-run` also do not qualify:
 
 - `evidence:test`
 - `evidence:<kind>:action:<tag>`
@@ -172,6 +174,11 @@ actually satisfy the requirement.
 For each requirement, the newest applicable full evidence wins. A newer failed
 or contradictory run invalidates an older pass until a still-newer full pass is
 recorded.
+
+The seven-field contract has no expected release repository or tag. Guard
+therefore does not create automatic `release` evidence from Git, GitHub CLI,
+or package-publication commands. Verify the intended public Release outside
+Guard and add an explicit contract-bound evidence record when appropriate.
 
 Cross-event completion checks require persistence. If `EFG_PERSIST=false`,
 action checks still work, but `evidence add` is rejected and a later Stop event
@@ -218,15 +225,16 @@ It does not intentionally retain prompts, full commands, tool outputs, transcrip
 - The Codex IDE extension does not currently support plugins.
 - Shell classification is intentionally conservative and cannot prove arbitrary script behavior.
 - Shell wrappers are inspected only for common direct forms; generated scripts and indirect process launch remain outside the deterministic boundary.
-- The seven-field contract carries objective, object, delivery, and scope context, but 0.2.1 hard decisions use only explicit `action:`, `tool:`, and `command-prefix:` rules.
-- Cost is not represented in the seven-field 0.2.1 contract and is not gated.
+- The seven-field contract carries objective, object, delivery, and scope context, but 0.2.2 hard decisions use only explicit `action:`, `tool:`, and `command-prefix:` rules.
+- Cost is not represented in the seven-field 0.2.2 contract and is not gated.
 - Natural-language rules never become hard blocks without an explicit structured rule.
 - `PostToolUse` cannot undo a side effect that already happened.
 - A Stop event is a turn boundary, not authoritative task completion.
 - Disabling persistence disables evidence continuity between Hook events.
 - CLI evidence can verify artifact bytes and digest, but the supplied status and
   semantic sufficiency remain attestations.
-- No live Intent Loop adapter or Continuity bridge has been integrated in 0.2.1; the provider document is file-based and the Continuity schema is a reserved boundary.
+- No live Intent Loop adapter or Continuity bridge has been integrated in 0.2.2; the provider document is file-based and the Continuity schema is a reserved boundary.
+- The separate DeepSeek Harness adapter is an unofficial alpha with in-memory receipts and exact upstream version pins; it is not code inside this Codex package.
 - The provider hash validates the current projection but cannot prove global version monotonicity across erased state.
 
 Read [docs/limitations.md](docs/limitations.md) before using `balanced` mode.
@@ -246,13 +254,14 @@ efficacy, false-positive rates, and outcome improvement still require isolated
 re-execution and shadow or controlled online comparison. Do not enable
 `balanced` broadly based on the inventory alone.
 
-The full command-Hook process continue path measured p50 184.76 ms and p95
-296.05 ms on one Windows x64 / Node 20.19.1 source checkout with persistence
-disabled. In the same run, an empty Node process measured 189.73 ms p95. The
+The exact 0.2.2 command-Hook process continue path measured p50 123.14 ms and
+p95 134.57 ms over 100 runs on one Windows x64 / Node 20.19.1 source checkout
+with persistence disabled. In the same run, 100 empty Node processes measured
+117.13 ms p95. The
 process floor is diagnostic only and is not subtracted from Guard latency. The
 result misses the PRD's provisional 100 ms p95 hypothesis, although it remains
 inside the configured three-second Hook timeout. See [the raw benchmark
-snapshot](evals/hook-latency-windows-2026-08-31-v0.2.1.json) and measure on your
+snapshot](evals/hook-latency-windows-2026-08-31-v0.2.2.json) and measure on your
 own host before broad rollout.
 
 ## Run a real shadow pilot
@@ -271,8 +280,10 @@ After collecting distinct task sessions, freeze and summarize the cohort:
 
 The summarizer accepts only regular JSON receipt exports, rejects duplicate
 session and receipt identifiers, hashes every input bundle, and reports the
-remaining sample count plus observed would-block and would-ask decisions. Keep
-the bundles private; do not commit them to this repository.
+remaining sample count plus observed would-block and would-ask decisions. Only
+sessions whose normalized events consistently record `guard_mode=shadow`
+count toward the gate; off, balanced, and older mode-unbound exports remain
+diagnostic. Keep the bundles private; do not commit them to this repository.
 
 Reaching 100 pseudonymous sessions does not prove they were independently
 sampled real user tasks. The summary also does not establish precision,

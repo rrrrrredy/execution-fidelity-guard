@@ -43,11 +43,16 @@ Actions absent from it continue unless a matching `forbidden`, `must_not`, or
 reminder when an unstructured constraint is present; an allow match does not
 silence that reminder.
 
-In `shadow` mode, a would-block or would-ask result becomes a reminder.
+In `shadow` mode, a pending-tool would-block or would-ask result becomes a
+non-blocking reminder. A missing-evidence Stop is recorded silently and does
+not continue or block the turn. Only `balanced` enforces structured action
+rules and requests bounded completion verification.
 
 ## Local install classification
 
-The classifier recognizes direct invocations of common package managers and environment provisioners, including:
+The classifier recognizes listed direct install, add, dependency-changing
+update, upgrade, audit-fix, rebuild, sync, and execution verbs for common
+package managers and environment provisioners, including:
 
 - pip, `python -m pip`, uv, pipx, poetry, pipenv;
 - npm, npx, pnpm, yarn, bun, bunx;
@@ -57,11 +62,16 @@ The classifier recognizes direct invocations of common package managers and envi
 
 Searches such as `rg "pip install"` and normal commands such as `node --test` do not match install_local.
 
-The parser splits unquoted shell segments and inspects the leading executable. It is not a complete PowerShell, cmd.exe, or POSIX shell interpreter. Commands hidden behind arbitrary scripts, aliases, eval, encoded payloads, or unsupported wrappers may not be recognized.
+The parser splits unquoted shell segments and inspects the leading executable
+plus the documented direct verb forms. This list is not a claim of complete
+package-manager grammar. It is not a complete PowerShell, cmd.exe, or POSIX
+shell interpreter. Commands hidden behind arbitrary scripts, aliases, eval,
+encoded payloads, unsupported manager verbs, or unsupported wrappers may not
+be recognized.
 
-Version 0.2.1 injects objective, primary-object, delivery-surface, scope, and
+Version 0.2.2 injects objective, primary-object, delivery-surface, scope, and
 must fields as bounded Agent context, but it does not derive path-aware gates
-from them. Cost is not a TaskContractLite field in 0.2.1. Hard decisions use
+from them. Cost is not a TaskContractLite field in 0.2.2. Hard decisions use
 the structured rule forms above.
 
 ## Natural-language constraints

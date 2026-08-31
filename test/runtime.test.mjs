@@ -60,6 +60,65 @@ test("PreToolUse blocks a deterministic forbidden install", async (t) => {
   assert.equal(output.hookSpecificOutput.hookEventName, "PreToolUse");
 });
 
+test("PreToolUse blocks option-prefixed installs that previously bypassed policy", async (t) => {
+  const stateRoot = await temporaryState(t);
+  const binding = makeBinding(
+    makeContract({ forbidden: ["action:install_local"] }),
+  );
+  for (const command of [
+    "npm --loglevel warn install lodash",
+    "pip --index-url https://example.invalid/simple install pytest",
+    "python3.11 -m pip --index-url https://example.invalid/simple install pytest",
+    "pnpm --filter app add lodash",
+    "cargo --color always install ripgrep",
+    "command -- npm install lodash",
+    "nice -n 5 npm install lodash",
+    "timeout 30 npm install lodash",
+    "env env env env env env env env env npm install lodash",
+    "env -S \"npm install lodash\"",
+    "env --split-string=\"npm install lodash\"",
+    "env -S npm\\ install\\ lodash",
+    "env --split-string=npm\\ install\\ lodash",
+    "sudo -H apt install jq",
+    "sudo -E -H apt install jq",
+    "sh -ec \"npm install lodash\"",
+    "bash -xec \"npm install lodash\"",
+    "npm add lodash",
+    "yarn --cwd app dlx create-vite",
+  ]) {
+    const output = await handleHook(preToolInput(command), {
+      binding,
+      config: makeConfig(stateRoot),
+    });
+    assert.equal(output.hookSpecificOutput.permissionDecision, "deny", command);
+  }
+});
+
+test("PreToolUse blocks git branch mutations while branch inspection stays quiet", async (t) => {
+  const stateRoot = await temporaryState(t);
+  const binding = makeBinding(makeContract({ forbidden: ["action:write"] }));
+  for (const command of [
+    "git branch new-feature",
+    "git branch -M main",
+    "git branch --set-upstream-to=origin/main main",
+    "npm uninstall lodash",
+    "npm update lodash",
+  ]) {
+    const output = await handleHook(preToolInput(command), {
+      binding,
+      config: makeConfig(stateRoot),
+    });
+    assert.equal(output.hookSpecificOutput.permissionDecision, "deny", command);
+  }
+  for (const command of ["git branch --list", "git branch --show-current"]) {
+    const output = await handleHook(preToolInput(command), {
+      binding,
+      config: makeConfig(stateRoot),
+    });
+    assert.equal(output, null, command);
+  }
+});
+
 test("PreToolUse maps requires_user to deny plus an unlock question", async (t) => {
   const stateRoot = await temporaryState(t);
   const binding = makeBinding(
@@ -132,6 +191,58 @@ test("PostToolUse failure becomes contradictory evidence, not rollback", async (
     /failed tool result/,
   );
   assert.equal(JSON.stringify(output).includes("rollback"), false);
+});
+
+test("off mode emits no Hook policy output for context, result, or Stop events", async (t) => {
+  const stateRoot = await temporaryState(t);
+  const binding = makeBinding();
+  const config = makeConfig(stateRoot, { mode: "off", persist: false });
+  for (const input of [
+    {
+      session_id: "off-session",
+      cwd: projectRoot,
+      hook_event_name: "SessionStart",
+      source: "startup",
+    },
+    {
+      session_id: "off-session",
+      cwd: projectRoot,
+      hook_event_name: "SubagentStart",
+      agent_id: "agent-off",
+      agent_type: "reviewer",
+    },
+    {
+      ...preToolInput("node --test", { session_id: "off-session" }),
+      hook_event_name: "PostToolUse",
+      tool_response: { exit_code: 1, output: "failed" },
+    },
+    {
+      session_id: "off-session",
+      cwd: projectRoot,
+      hook_event_name: "Stop",
+      stop_hook_active: false,
+      last_assistant_message: "Everything is completed.",
+    },
+  ]) {
+    assert.equal(await handleHook(input, { binding, config }), null, input.hook_event_name);
+  }
+});
+
+test("shadow mode records a missing-evidence Stop without continuing the turn", async (t) => {
+  const stateRoot = await temporaryState(t);
+  const binding = makeBinding();
+  const config = makeConfig(stateRoot, { mode: "shadow", persist: false });
+  const output = await handleHook(
+    {
+      session_id: "shadow-session",
+      cwd: projectRoot,
+      hook_event_name: "Stop",
+      stop_hook_active: false,
+      last_assistant_message: "Everything is completed.",
+    },
+    { binding, config },
+  );
+  assert.equal(output, null);
 });
 
 test("passing structured test evidence satisfies Stop verification", async (t) => {

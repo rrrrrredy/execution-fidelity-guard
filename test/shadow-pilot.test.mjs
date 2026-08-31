@@ -26,6 +26,9 @@ function bundle(sessionHex, options = {}) {
       coverage: options.eventCoverage ?? "observed",
       facts: {
         contract_status: options.contractStatus ?? "bound",
+        ...(options.guardMode === null
+          ? {}
+          : { guard_mode: options.guardMode ?? "shadow" }),
       },
     },
   ];
@@ -38,7 +41,12 @@ function bundle(sessionHex, options = {}) {
       contract_ref: "fallback:test",
       contract_version: 1,
       coverage: "observed",
-      facts: { contract_status: "bound" },
+      facts: {
+        contract_status: "bound",
+        ...(options.guardMode === null
+          ? {}
+          : { guard_mode: options.guardMode ?? "shadow" }),
+      },
     });
   }
   return {
@@ -92,6 +100,8 @@ test("shadow pilot summary deduplicates sessions and preserves the claim boundar
   );
 
   assert.equal(report.sessions.unique, 2);
+  assert.equal(report.schema_version, "1.1");
+  assert.equal(report.sessions.in_shadow_mode, 2);
   assert.equal(report.sessions.with_pre_tool_use, 2);
   assert.equal(report.sessions.with_stop, 1);
   assert.equal(report.sessions.with_shadow_candidate, 1);
@@ -100,6 +110,7 @@ test("shadow pilot summary deduplicates sessions and preserves the claim boundar
   assert.equal(report.observations.runtime_decision_latency_ms.p50, 3);
   assert.equal(report.observations.runtime_decision_latency_ms.p95, 9);
   assert.equal(report.sample_gate.reached, false);
+  assert.equal(report.sample_gate.eligible_shadow_sessions, 2);
   assert.equal(report.sample_gate.remaining, 98);
   assert.match(report.claim_boundary.join(" "), /does not by itself prove/);
   assert.match(report.claim_boundary.join(" "), /does not establish precision/);
@@ -111,6 +122,63 @@ test("shadow pilot summary deduplicates sessions and preserves the claim boundar
       ),
     /--target must be a positive integer/,
   );
+});
+
+test("shadow pilot gate excludes off, balanced, and legacy mode-unbound sessions", () => {
+  const report = summarizePilotBundles(
+    [
+      {
+        label: "shadow.json",
+        sha256: "1".repeat(64),
+        bundle: bundle("1".repeat(64), { guardMode: "shadow" }),
+      },
+      {
+        label: "off.json",
+        sha256: "2".repeat(64),
+        bundle: bundle("2".repeat(64), { guardMode: "off" }),
+      },
+      {
+        label: "balanced.json",
+        sha256: "3".repeat(64),
+        bundle: bundle("3".repeat(64), { guardMode: "balanced" }),
+      },
+      {
+        label: "legacy.json",
+        sha256: "4".repeat(64),
+        bundle: bundle("4".repeat(64), { guardMode: null }),
+      },
+    ],
+    { targetSessions: 2 },
+  );
+
+  assert.equal(report.sessions.unique, 4);
+  assert.equal(report.sessions.in_shadow_mode, 1);
+  assert.equal(report.sample_gate.eligible_shadow_sessions, 1);
+  assert.equal(report.sample_gate.reached, false);
+  assert.equal(report.sample_gate.remaining, 1);
+  assert.match(report.claim_boundary.join(" "), /guard_mode=shadow/);
+});
+
+test("shadow pilot accepts a non-intervening shadow completion-gap receipt", () => {
+  const value = bundle("5".repeat(64), { includeStop: true });
+  value.receipts.push({
+    ...value.receipts[0],
+    receipt_id: "rcpt_shadow_stop",
+    event_ref: value.events[1].event_id,
+    decision: "remind",
+    authority: "external_evidence",
+    severity: "medium",
+    visibility: "silent",
+    reason_codes: [
+      "shadow_would_continue_verification",
+      "completion_claim_unverified",
+    ],
+  });
+  const report = summarizePilotBundles([
+    { label: "shadow-stop.json", sha256: "5".repeat(64), bundle: value },
+  ]);
+  assert.equal(report.sessions.in_shadow_mode, 1);
+  assert.equal(report.observations.reasons.shadow_would_continue_verification, 1);
 });
 
 test("shadow pilot summary rejects duplicate sessions and receipts", () => {
