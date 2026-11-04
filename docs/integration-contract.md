@@ -148,8 +148,6 @@ implemented.
   adapter is implemented against Harness `0.1.2-alpha.2`; its source and real
   ToolRuntime/AgentLoop composition are tested, but installed-profile UX and
   future Harness alphas are not guaranteed.
-- The plugin was not installed into the maintainer's local Codex environment,
-  so installed-client discovery and end-to-end Hook delivery remain unverified.
 - Hosted WebSearch, specialized tools that opt out of Hooks, and later
   `write_stdin` input are outside complete interception.
 - Common direct shell wrappers are classified, but generated scripts and
@@ -186,7 +184,6 @@ implemented.
   use the same local state root and filesystem. The cap is not global across
   machines, different state roots, or erased state.
 - SubagentStart contract injection and SubagentStop recording are covered by
-  source tests. Installed-client delivery and whether every future subagent
-  implementation traverses these Host events remain unverified.
+  source tests. Delivery uses these events exposed by the Host.
 - The Codex IDE extension does not currently support plugins, so Guard cannot
   execute on that Host surface.

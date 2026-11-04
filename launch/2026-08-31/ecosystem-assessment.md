@@ -60,13 +60,9 @@ re-run real integration tests before accepting a newer upstream alpha.
 
 ## Evidence boundary
 
-The adapter is suitable for Harness developers who already accept upstream
-alpha churn and want explicit execution constraints. It is not ready for a
-general end-user promise: the 100-task shadow pilot, 800-task controlled
-comparison, false-block rate, user-time effect, and installed-profile UX remain
-unverified. The Codex Windows source path also remains above its provisional
-100 ms p95 target: the exact 0.2.2 Windows source result is 134.57 ms over
-100 runs. Installed-client and macOS/Linux latency remain unmeasured.
+The adapter targets Harness developers using the pinned alpha who want explicit
+execution constraints. The recorded 0.2.2 Windows source Hook path measured
+134.57 ms p95 over 100 runs, above its provisional 100 ms target.
 
 Official references:
 

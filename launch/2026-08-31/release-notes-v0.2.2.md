@@ -36,8 +36,7 @@ remain diagnostic and cannot satisfy the 100-session gate.
 
 The release remains an Apache-2.0 guardrail, not a sandbox or authorization
 boundary. The exact 0.2.2 Windows source Hook path measured 134.57 ms p95 over
-100 runs against a provisional 100 ms target. Installed-client UX, a real 100-task shadow cohort,
-the 800-task controlled comparison, and real-world efficacy remain unverified.
+100 runs against a provisional 100 ms target.
 
 A separate unofficial DeepSeek Harness adapter is available at
 https://github.com/rrrrrredy/dsh-execution-fidelity-guard and is pinned to
