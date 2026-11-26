@@ -112,6 +112,7 @@ function discardWrapperOptions(
   allowAssignments = false,
   preserveShortCase = false,
 ) {
+  const options = [];
   while (tokens[0]) {
     const token = String(tokens[0]);
     if (allowAssignments && /^[A-Za-z_][A-Za-z0-9_]*=/.test(token)) {
@@ -128,6 +129,7 @@ function discardWrapperOptions(
       preserveShortCase && token.startsWith("-") && !token.startsWith("--")
         ? token
         : lower;
+    options.push(token);
     const option = optionSource.split("=", 1)[0];
     tokens.shift();
     const joinedShortValue =
@@ -141,6 +143,7 @@ function discardWrapperOptions(
       tokens.shift();
     }
   }
+  return options;
 }
 
 function discardEnvWrapperOptions(tokens) {
@@ -189,7 +192,7 @@ function discardEnvWrapperOptions(tokens) {
   }
 }
 
-function commandTokens(segment) {
+function commandTokens(segment, effects) {
   const tokens = tokenize(segment);
   while (tokens.length) {
     if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[0])) {
@@ -240,7 +243,10 @@ function commandTokens(segment) {
     }
     if (exe === "time") {
       tokens.shift();
-      discardWrapperOptions(tokens, TIME_VALUE_OPTIONS);
+      const options = discardWrapperOptions(tokens, TIME_VALUE_OPTIONS);
+      if (options.some((option) => option.startsWith("-o") || option === "--output" || option.startsWith("--output="))) {
+        effects.add("write_workspace");
+      }
       continue;
     }
     break;
@@ -496,7 +502,8 @@ function hasOutputRedirect(segment) {
 }
 
 function classifySegment(segment, depth = 0) {
-  const tokens = commandTokens(segment);
+  const wrapperEffects = new Set();
+  const tokens = commandTokens(segment, wrapperEffects);
   const exe = executableName(tokens[0]);
   const rawArgs = tokens.slice(1);
   const args = rawArgs.map((item) => item.toLowerCase());
@@ -532,10 +539,8 @@ function classifySegment(segment, depth = 0) {
     ["repo", "release"].includes(gh?.name) && ghSubcommand?.name === "delete";
   const ghApiDeletes = gh?.name === "api" && ghApiMethod === "delete";
   const tags = new Set();
-  if (!exe) return tags;
   if (exe === "command" && (tokens[1] === "-v" || tokens[1] === "-V")) {
     tags.add("read");
-    return tags;
   }
   if (depth < MAX_SHELL_WRAPPER_DEPTH) {
     const wrapped = wrappedShellCommand(tokens);
@@ -543,14 +548,12 @@ function classifySegment(segment, depth = 0) {
       for (const nested of splitSegments(wrapped)) {
         for (const tag of classifySegment(nested, depth + 1)) tags.add(tag);
       }
-      if (tags.size) return tags;
     }
   }
   if (isInstall(tokens)) {
     tags.add("install_local");
     tags.add("write_workspace");
     tags.add("network");
-    return tags;
   }
   const packageMutation =
     (exe === "npm" &&
@@ -577,7 +580,6 @@ function classifySegment(segment, depth = 0) {
   if (packageMutation) {
     tags.add("write_workspace");
     tags.add("network");
-    return tags;
   }
   if (
     (git?.name === "push") ||
@@ -593,7 +595,6 @@ function classifySegment(segment, depth = 0) {
       tags.add("delete");
       tags.add("destructive");
     }
-    return tags;
   }
   if (
     gh &&
@@ -625,7 +626,6 @@ function classifySegment(segment, depth = 0) {
       tags.add("delete");
       tags.add("destructive");
     }
-    return tags;
   }
   if (
     ["rm", "rmdir", "del", "erase", "remove-item"].includes(exe) ||
@@ -645,7 +645,7 @@ function classifySegment(segment, depth = 0) {
   ) {
     tags.add("delete");
     tags.add("destructive");
-    return tags;
+    tags.add("write_workspace");
   }
   if (
     [
@@ -655,11 +655,9 @@ function classifySegment(segment, depth = 0) {
     ].includes(exe) ||
     (exe === "sed" &&
       args.some((value) => value === "-i" || value.startsWith("-i.") ||
-        value === "--in-place" || value.startsWith("--in-place="))) ||
-    hasOutputRedirect(segment)
+        value === "--in-place" || value.startsWith("--in-place=")))
   ) {
     tags.add("write_workspace");
-    return tags;
   }
   const inspectionOnly = args.some((value) =>
     ["--help", "--version"].includes(value),
@@ -672,7 +670,6 @@ function classifySegment(segment, depth = 0) {
     (exe === "dd" && args.some((value) => value.startsWith("of=")))
   ) {
     tags.add("write_workspace");
-    return tags;
   }
   if (exe === "git") {
     const nested = commandView(git.args);
@@ -689,12 +686,13 @@ function classifySegment(segment, depth = 0) {
         "tag", "worktree",
       ].includes(git.name)
     ) tags.add("write_workspace");
-    else tags.add("unknown");
-    return tags;
   }
-  if (READ_COMMANDS.has(exe)) {
+  const versionOnly = rawArgs.length === 1 && (
+    ((exe === "py" || /^python(?:\d+(?:\.\d+)?)?$/.test(exe)) && ["--version", "-V"].includes(rawArgs[0])) ||
+    (exe === "node" && ["--version", "-v"].includes(rawArgs[0]))
+  );
+  if (READ_COMMANDS.has(exe) || versionOnly) {
     tags.add("read");
-    return tags;
   }
   const curlMethod = exe === "curl" ? optionValue(args, ["-x", "--request"]) : null;
   const curlHasBody =
@@ -746,13 +744,13 @@ function classifySegment(segment, depth = 0) {
       tags.add("delete");
       tags.add("destructive");
     }
-    return tags;
   }
   if (["curl", "wget", "invoke-restmethod", "invoke-webrequest", "irm", "iwr"].includes(exe)) {
     tags.add("network");
-    return tags;
   }
-  tags.add("unknown");
+  if (!tags.size && exe) tags.add("unknown");
+  for (const effect of wrapperEffects) tags.add(effect);
+  if (hasOutputRedirect(segment)) tags.add("write_workspace");
   return tags;
 }
 
@@ -843,6 +841,7 @@ export function classifyToolAction(input) {
     command,
     tags: [...tags].sort(),
     reversible:
+      !tags.has("unknown") &&
       !tags.has("delete") &&
       !tags.has("destructive") &&
       !tags.has("install_local") &&

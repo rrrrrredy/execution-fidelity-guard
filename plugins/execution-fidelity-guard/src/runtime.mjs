@@ -118,7 +118,7 @@ function normalizedEvent(input, binding, action, mode, now) {
     tool_name: input.tool_name == null ? null : String(input.tool_name),
     contract_ref: identity.contractRef,
     contract_version: identity.contractVersion,
-    coverage: binding.status === "bound" ? "observed" : "partial",
+    coverage: binding.status === "bound" && !action?.tags.includes("unknown") ? "observed" : "partial",
     input_sha256: sha256(eventHashInput(input)),
     result_sha256:
       input.hook_event_name === "PostToolUse"
@@ -158,8 +158,8 @@ function receiptFor(event, decision, now, latencyMs) {
     rule_ids: decision.ruleIds,
     evidence_refs: decision.evidenceRefs,
     visibility: decision.visibility,
-    reversible: decision.reversible,
-    coverage: decision.coverage,
+    reversible: event.facts.reversible ?? decision.reversible,
+    coverage: decision.coverage === "observed" ? event.coverage : decision.coverage,
     unlock: decision.unlock,
     semantic_model: null,
     decided_at: now.toISOString(),
@@ -391,7 +391,7 @@ export async function handleHook(input, options = {}) {
   }
 
   let decision = continueDecision({
-    coverage: binding.status === "bound" ? "observed" : "partial",
+    coverage: event.coverage,
   });
   let output = null;
 

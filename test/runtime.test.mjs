@@ -9,6 +9,7 @@ import {
 import { handleHook } from "../plugins/execution-fidelity-guard/src/runtime.mjs";
 import {
   deleteSession,
+  readRecords,
   sessionStatePath,
   writeRecord,
 } from "../plugins/execution-fidelity-guard/src/store.mjs";
@@ -519,4 +520,45 @@ test("hashed session directories do not collide after identifier normalization",
   await deleteSession(config, "a/b");
   assert.equal(await pathExists(slashPath), false);
   assert.equal(await pathExists(underscorePath), true);
+});
+
+test("Stop checks affirmative clauses independently of neighboring unfinished work", async (t) => {
+  const config = makeConfig(await temporaryState(t));
+  for (const [i, [last_assistant_message, claim]] of [
+    ["开发已完成，文档尚未完成。", true],
+    ["Docs are not completed, but development is finished.", true],
+    ["实现已完成；documentation is not finished.", true],
+    ["Not done yet. 文档尚未完成。", false],
+    ["Not all tests passed. Documentation is not yet finished.", false],
+    ["文档尚未完成但实现已经交付了。", true],
+    ["The work is completed.", true],
+  ].entries()) {
+    const output = await handleHook({
+      hook_event_name: "Stop", session_id: "clauses-" + i, turn_id: "turn", last_assistant_message,
+    }, { config, binding: makeBinding() });
+    assert.equal(output?.decision === "block", claim, last_assistant_message);
+  }
+});
+
+test("opaque actions retain partial coverage in persisted events and receipts", async (t) => {
+  const config = makeConfig(await temporaryState(t));
+  const binding = makeBinding();
+  for (const hook_event_name of ["PreToolUse", "PermissionRequest", "PostToolUse"]) {
+    const input = preToolInput('node -e "console.log(1)"', {
+      hook_event_name, tool_response: { exit_code: 0 },
+    });
+    await handleHook(input, { config, binding });
+  }
+  const events = await readRecords(config, "session-test", "events");
+  const receipts = await readRecords(config, "session-test", "receipts");
+  assert.equal(events.length, 3);
+  assert.equal(receipts.length, 3);
+  for (const event of events) {
+    assert.equal(event.coverage, "partial");
+    assert.equal(event.facts.reversible, false);
+  }
+  for (const receipt of receipts) {
+    assert.equal(receipt.coverage, "partial");
+    assert.equal(receipt.reversible, false);
+  }
 });

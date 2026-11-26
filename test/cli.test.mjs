@@ -531,3 +531,18 @@ test("CLI rejects missing option values and malformed requirement indexes", asyn
   assert.equal(malformed.status, 1);
   assert.match(malformed.stderr, /valid 1-based index/);
 });
+
+test("check and explain accept exactly one MiB and reject one extra byte", async (t) => {
+  const file = path.join(await temporaryState(t), "event.json");
+  const input = await readFile(path.join(projectRoot, "examples/events/pre-tool-install.json"));
+  const padded = Buffer.concat([input, Buffer.alloc(1024 * 1024 - input.length, 0x20)]);
+  for (const command of ["check", "explain"]) {
+    const args = [command, "--event", file, "--contract", "examples/contracts/no-local-install.json"];
+    await writeFile(file, padded);
+    assert.equal(runCli(args).status, 0);
+    await writeFile(file, Buffer.concat([padded, Buffer.from(" ")]));
+    const result = runCli(args);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /JSON input exceeds the safety limit/);
+  }
+});

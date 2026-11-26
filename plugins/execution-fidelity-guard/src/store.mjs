@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import {
   mkdir,
+  link,
   lstat,
   open,
   readFile,
@@ -298,8 +299,7 @@ async function readStopLockOwner(lockPath) {
   return { info, owner };
 }
 
-async function releaseOwnedLockFile(filePath, owner, handle) {
-  await handle?.close().catch(() => {});
+async function releaseOwnedLockFile(filePath, owner) {
   try {
     const current = await readStopLockOwner(filePath);
     if (current.owner.token !== owner.token) return;
@@ -314,22 +314,14 @@ async function releaseOwnedLockFile(filePath, owner, handle) {
   }
 }
 
-async function acquireStopLockReclaimClaim(lockPath, staleOwner, owner) {
+async function acquireStopLockReclaimClaim(lockPath, staleOwner, candidate) {
   let generation = sha256(staleOwner.token);
   for (let depth = 0; depth < STOP_LOCK_RECLAIM_DEPTH; depth += 1) {
     const claimPath = lockPath + ".reclaim-" + generation;
-    let claimHandle = null;
     try {
-      claimHandle = await open(claimPath, "wx", 0o600);
-      await claimHandle.writeFile(JSON.stringify(owner) + "\n", "utf8");
-      await claimHandle.sync();
-      return { claimHandle, claimPath };
+      await link(candidate, claimPath);
+      return claimPath;
     } catch (error) {
-      if (claimHandle) {
-        await claimHandle.close().catch(() => {});
-        await unlink(claimPath).catch(() => {});
-        claimHandle = null;
-      }
       if (error?.code !== "EEXIST") throw error;
       let currentClaim;
       try {
@@ -354,13 +346,9 @@ async function acquireStopLockReclaimClaim(lockPath, staleOwner, owner) {
   return null;
 }
 
-async function reclaimStaleStopLock(lockPath, expected, owner) {
-  const claim = await acquireStopLockReclaimClaim(
-    lockPath,
-    expected.owner,
-    owner,
-  );
-  if (!claim) return false;
+async function reclaimStaleStopLock(lockPath, expected, owner, candidate) {
+  const claimPath = await acquireStopLockReclaimClaim(lockPath, expected.owner, candidate);
+  if (!claimPath) return false;
   try {
     const current = await readStopLockOwner(lockPath);
     const stale = Date.now() - current.info.mtimeMs > STOP_LOCK_STALE_MS;
@@ -389,11 +377,7 @@ async function reclaimStaleStopLock(lockPath, expected, owner) {
     if (["ENOENT", "ELOCKUNREADY"].includes(error?.code)) return false;
     throw error;
   } finally {
-    await releaseOwnedLockFile(
-      claim.claimPath,
-      owner,
-      claim.claimHandle,
-    );
+    await releaseOwnedLockFile(claimPath, owner);
   }
 }
 
@@ -411,44 +395,43 @@ async function withStopStateLock(config, sessionId, operation) {
     pid: process.pid,
     host: STOP_LOCK_HOST,
   };
-  let handle = null;
-  for (let attempt = 0; attempt < STOP_LOCK_ATTEMPTS; attempt += 1) {
+  // Publish only fully written owners, including during stale-lock reclamation.
+  const candidate = path.join(directory, ".stop-owner-" + safeId(owner.token));
+  const handle = await open(candidate, "wx", 0o600);
+  try {
     try {
-      handle = await open(lockPath, "wx", 0o600);
       await handle.writeFile(JSON.stringify(owner) + "\n", "utf8");
       await handle.sync();
-      break;
-    } catch (error) {
-      if (handle) {
-        await handle.close().catch(() => {});
-        handle = null;
-        await unlink(lockPath).catch(() => {});
-      }
-      if (error?.code !== "EEXIST") throw error;
+    } finally {
+      await handle.close();
+    }
+    for (let attempt = 0; attempt < STOP_LOCK_ATTEMPTS; attempt += 1) {
       try {
-        const current = await readStopLockOwner(lockPath);
-        const stale = Date.now() - current.info.mtimeMs > STOP_LOCK_STALE_MS;
-        const knownDeadLocalOwner =
-          current.owner.host === STOP_LOCK_HOST &&
-          !processIsAlive(current.owner.pid);
-        if (stale && knownDeadLocalOwner) {
-          if (await reclaimStaleStopLock(lockPath, current, owner)) {
+        await link(candidate, lockPath);
+      } catch (error) {
+        if (error?.code !== "EEXIST") throw error;
+        try {
+          const current = await readStopLockOwner(lockPath);
+          const stale = Date.now() - current.info.mtimeMs > STOP_LOCK_STALE_MS;
+          if (stale && current.owner.host === STOP_LOCK_HOST && !processIsAlive(current.owner.pid) &&
+              await reclaimStaleStopLock(lockPath, current, owner, candidate)) {
             continue;
           }
+        } catch (lockError) {
+          if (!["ENOENT", "ELOCKUNREADY"].includes(lockError?.code)) throw lockError;
         }
-      } catch (lockError) {
-        if (!["ENOENT", "ELOCKUNREADY"].includes(lockError?.code)) {
-          throw lockError;
-        }
+        await delay(10);
+        continue;
       }
-      await delay(10);
+      try {
+        return await operation();
+      } finally {
+        await releaseOwnedLockFile(lockPath, owner);
+      }
     }
-  }
-  if (!handle) throw new Error("stop state lock timed out");
-  try {
-    return await operation();
+    throw new Error("stop state lock timed out");
   } finally {
-    await releaseOwnedLockFile(lockPath, owner, handle);
+    await unlink(candidate);
   }
 }
 

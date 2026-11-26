@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: Apache-2.0
-import { access, lstat, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, lstat, mkdir, open, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -110,9 +110,20 @@ function inputContext(options, hookEventName = "SessionStart") {
 }
 
 async function readJson(filePath, maximum = 1024 * 1024) {
-  const buffer = await readFile(filePath);
-  if (buffer.length > maximum) throw new Error("JSON input exceeds the safety limit");
-  return JSON.parse(buffer.toString("utf8"));
+  const file = await open(filePath, "r");
+  try {
+    const buffer = Buffer.allocUnsafe(maximum + 1);
+    let length = 0;
+    while (length < buffer.length) {
+      const { bytesRead } = await file.read(buffer, length, buffer.length - length, null);
+      if (!bytesRead) break;
+      length += bytesRead;
+    }
+    if (length > maximum) throw new Error("JSON input exceeds the safety limit");
+    return JSON.parse(buffer.toString("utf8", 0, length));
+  } finally {
+    await file.close();
+  }
 }
 
 function templateContract(options = {}) {

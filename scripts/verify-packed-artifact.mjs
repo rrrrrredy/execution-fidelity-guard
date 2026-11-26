@@ -62,7 +62,7 @@ const missing = [...required].filter((item) => !packaged.has(item));
 if (missing.length) {
   throw new Error("packed artifact omits required files: " + missing.join(", "));
 }
-for (const forbidden of ["evals/private/", "docs/frozen/", ".runtime/"]) {
+for (const forbidden of ["launch/", "evals/private/", "docs/frozen/", ".runtime/"]) {
   if ([...packaged].some((item) => item.startsWith(forbidden))) {
     throw new Error("packed artifact exposes private or runtime data: " + forbidden);
   }

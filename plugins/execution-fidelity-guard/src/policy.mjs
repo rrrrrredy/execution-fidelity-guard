@@ -35,7 +35,7 @@ function matchesRule(rule, action) {
   return false;
 }
 
-function baseDecision(overrides = {}) {
+function baseDecision(action, overrides = {}) {
   return {
     decision: "continue",
     authority: "deterministic_rule",
@@ -44,8 +44,8 @@ function baseDecision(overrides = {}) {
     ruleIds: [],
     evidenceRefs: [],
     visibility: "silent",
-    reversible: true,
-    coverage: "observed",
+    reversible: action.reversible,
+    coverage: action.tags.includes("unknown") ? "partial" : "observed",
     unlock: null,
     ...overrides,
   };
@@ -57,24 +57,22 @@ function ruleId(bucket, rule) {
 
 export function decidePreTool({ binding, action, mode = "balanced" }) {
   if (mode === "off") {
-    return baseDecision({ reasonCodes: ["guard_disabled"], coverage: "unobserved" });
+    return baseDecision(action, { reasonCodes: ["guard_disabled"], coverage: "unobserved" });
   }
   if (binding.status !== "bound") {
     if (!action.highRisk) {
-      return baseDecision({
+      return baseDecision(action, {
         reasonCodes: ["contract_unbound"],
         coverage: "partial",
-        reversible: action.reversible,
       });
     }
-    return baseDecision({
+    return baseDecision(action, {
       decision: "remind",
       authority: "semantic_candidate",
       severity: "medium",
       reasonCodes: ["contract_unbound", "high_risk_action_uncovered"],
       visibility: "model",
       coverage: "partial",
-      reversible: action.reversible,
       unlock: "Bind a valid task contract before relying on this guard.",
     });
   }
@@ -87,24 +85,22 @@ export function decidePreTool({ binding, action, mode = "balanced" }) {
   for (const [bucket, rule] of forbidden) {
     if (!matchesRule(rule, action)) continue;
     if (mode === "shadow") {
-      return baseDecision({
+      return baseDecision(action, {
         decision: "remind",
         authority: "deterministic_rule",
         severity: "high",
         reasonCodes: ["shadow_would_block", "explicit_contract_conflict"],
         ruleIds: [ruleId(bucket, rule)],
         visibility: "model",
-        reversible: action.reversible,
       });
     }
-    return baseDecision({
+    return baseDecision(action, {
       decision: "block",
       authority: "deterministic_rule",
       severity: "high",
       reasonCodes: ["explicit_contract_conflict"],
       ruleIds: [ruleId(bucket, rule)],
       visibility: "user",
-      reversible: action.reversible,
       unlock:
         "Change the contract or choose an action outside the matched " +
         rule.kind +
@@ -116,24 +112,22 @@ export function decidePreTool({ binding, action, mode = "balanced" }) {
     const rule = parseRule(value);
     if (!matchesRule(rule, action)) continue;
     if (mode === "shadow") {
-      return baseDecision({
+      return baseDecision(action, {
         decision: "remind",
         authority: "deterministic_rule",
         severity: "medium",
         reasonCodes: ["shadow_would_ask", "explicit_user_authorization_required"],
         ruleIds: [ruleId("requires_user", rule)],
         visibility: "model",
-        reversible: action.reversible,
       });
     }
-    return baseDecision({
+    return baseDecision(action, {
       decision: "ask",
       authority: "deterministic_rule",
       severity: "medium",
       reasonCodes: ["explicit_user_authorization_required"],
       ruleIds: [ruleId("requires_user", rule)],
       visibility: "user",
-      reversible: action.reversible,
       unlock:
         "Ask the user one concise question to authorize or reject this " +
         action.tags.join(", ") +
@@ -150,26 +144,24 @@ export function decidePreTool({ binding, action, mode = "balanced" }) {
     .some((rule) => !rule.structured);
 
   if (action.highRisk && hasUnstructuredConstraint) {
-    return baseDecision({
+    return baseDecision(action, {
       decision: "remind",
       authority: "semantic_candidate",
       severity: "medium",
       reasonCodes: ["semantic_constraint_candidate", "no_deterministic_match"],
       visibility: "model",
-      reversible: action.reversible,
       unlock: "Compare the pending action with the natural-language contract constraints.",
     });
   }
 
   const allowed = contract.authorization.allowed.map(parseRule);
   if (allowed.some((rule) => matchesRule(rule, action))) {
-    return baseDecision({
+    return baseDecision(action, {
       reasonCodes: ["explicit_contract_allowance"],
-      reversible: action.reversible,
     });
   }
 
-  return baseDecision({ reversible: action.reversible });
+  return baseDecision(action);
 }
 
 export function messageForDecision(decision, binding, action) {

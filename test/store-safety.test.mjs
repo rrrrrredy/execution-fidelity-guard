@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import {
   access,
   mkdtemp,
   mkdir,
+  readFile,
   realpath,
   rm,
   symlink,
@@ -185,4 +187,37 @@ test("stop lock never reclaims a stale owner process that is still alive", async
     /lock timed out/,
   );
   await access(lockPath);
+});
+
+test("interrupted owner preparation never occupies the public Stop lock", async (t) => {
+  const config = makeConfig(await temporaryState(t));
+  const id = "interrupted-owner";
+  await writeStopState(config, id, { attempts: 0 });
+  const directory = sessionStatePath(config, id);
+  // Interrupt an actual writer after exclusive create, before its first owner byte.
+  const storeUrl = new URL("../plugins/execution-fidelity-guard/src/store.mjs", import.meta.url).href;
+  const interrupted = spawnSync(process.execPath, ["--input-type=module", "-e", `
+    import fs from "node:fs/promises";
+    import { syncBuiltinESMExports } from "node:module";
+    const original = fs.open;
+    fs.open = async (name, flags, ...rest) => {
+      const handle = await original(name, flags, ...rest);
+      if (flags === "wx" && /stop-owner-|stop-state[.]lock$/.test(String(name))) process.exit(71);
+      return handle;
+    };
+    syncBuiltinESMExports();
+    const { transitionStopState } = await import(${JSON.stringify(storeUrl)});
+    await transitionStopState(${JSON.stringify(config)}, ${JSON.stringify(id)}, async () => ({}));
+  `], { encoding: "utf8" });
+  assert.equal(interrupted.status, 71, interrupted.stderr);
+  await assert.rejects(access(path.join(directory, "stop-state.lock")), { code: "ENOENT" });
+  const value = await transitionStopState(config, id, async prior => {
+    const owner = JSON.parse(await readFile(path.join(directory, "stop-state.lock"), "utf8"));
+    assert.equal(owner.pid, process.pid);
+    assert.ok(owner.token);
+    return { state: { attempts: prior.attempts + 1 }, value: "updated" };
+  });
+  assert.equal(value, "updated");
+  assert.deepEqual(await readStopState(config, id), { attempts: 1 });
+  await assert.rejects(access(path.join(directory, "stop-state.lock")), { code: "ENOENT" });
 });

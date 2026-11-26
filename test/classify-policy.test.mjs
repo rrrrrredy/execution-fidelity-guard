@@ -511,3 +511,39 @@ test("read-only prefixed MCP tool names take precedence over embedded nouns", ()
   assert.deepEqual(action.tags, ["read"]);
   assert.equal(action.highRisk, false);
 });
+
+test("each effect of one command can independently enforce its contract rule", () => {
+  for (const [command, effects] of [
+    ["rm scratch.txt", ["delete", "write_workspace"]],
+    ["git status > report.txt", ["read", "write_workspace"]],
+    ['sh -c "git status" > report.txt', ["read", "write_workspace"]],
+    ["time -o timing.txt git status", ["read", "write_workspace"]],
+    ["curl --request POST https://example.invalid/record > result.json", ["network", "external_side_effect", "write_workspace"]],
+  ]) {
+    const action = classifyToolAction(preToolInput(command));
+    for (const tag of effects) {
+      assert.ok(action.tags.includes(tag), command + " missing " + tag);
+      const binding = makeBinding(makeContract({ forbidden: ["action:" + tag] }));
+      assert.equal(decidePreTool({ binding, action }).decision, "block");
+    }
+  }
+  const remote = classifyToolAction(preToolInput("gh release delete fixture"));
+  assert.ok(remote.tags.includes("delete") && !remote.tags.includes("write_workspace"));
+});
+
+test("opaque interpreter input retains uncertainty and recognized inspection remains observed", () => {
+  const binding = makeBinding();
+  for (const command of ['python -c "print(1)"', 'node -e "console.log(1)"', 'pwsh -Command "Get-FixtureState"', 'python -c "print(1)" > result.txt']) {
+    const action = classifyToolAction(preToolInput(command));
+    assert.ok(action.tags.includes("unknown"));
+    const decision = decidePreTool({ binding, action });
+    assert.equal(decision.coverage, "partial");
+    assert.equal(decision.reversible, false);
+    assert.equal(decision.decision, "continue");
+  }
+  for (const command of ["python --version", "node --version", 'pwsh -Command "Get-Content notes.txt"']) {
+    const action = classifyToolAction(preToolInput(command));
+    assert.deepEqual(action.tags, ["read"]);
+    assert.equal(decidePreTool({ binding, action }).coverage, "observed");
+  }
+});
